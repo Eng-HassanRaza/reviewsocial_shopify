@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+.DS_Store
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vscode/
+dist/
+build/
+.cache/
+.prisma/
+coverage/
+*.sqlite
+*.log
+shopify.app.toml
