@@ -1,6 +1,8 @@
 // app/routes/judgeme.callback.tsx
 import { redirect } from "react-router";
 
+export const handle = { isPublic: true };
+
 /* --- tiny cookie helpers --- */
 function getCookie(req: Request, name: string) {
   const cookie = req.headers.get("Cookie") || "";
@@ -8,24 +10,56 @@ function getCookie(req: Request, name: string) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 function clearCookieHeader(name: string) {
-  return [`${name}=; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=0`];
+  return [
+    `${name}=; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=0`,
+  ];
 }
 
-/* --- loader handles the OAuth code exchange, then redirects back to /app --- */
+/* --- loader: validate state, exchange code, then redirect into Admin Apps URL --- */
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
 
-  if (error) return redirect(`/app?judgeme_error=${encodeURIComponent(error)}`);
-  if (!code || !state) return redirect(`/app?judgeme_error=missing_params`);
-
+  // read cookies set in /judgeme/redirect
   const stateCookie = getCookie(request, "jm_oauth_state");
   const shop = getCookie(request, "jm_oauth_shop");
-  const host = getCookie(request, "jm_oauth_host");
+  const host = getCookie(request, "jm_oauth_host"); // ok if null
+
+  // Build your Admin Apps URL (embedded context)
+  const apiKey = process.env.SHOPIFY_API_KEY!;
+  const adminAppBase = shop && apiKey
+    ? `https://${shop}/admin/apps/${apiKey}/app`
+    : null; // fallback later if missing
+
+  // helper to finish (success or error) and clear temp cookies
+  const finish = (search: Record<string, string>) => {
+    const headers = new Headers();
+    clearCookieHeader("jm_oauth_state").forEach((c) =>
+      headers.append("Set-Cookie", c),
+    );
+    clearCookieHeader("jm_oauth_shop").forEach((c) =>
+      headers.append("Set-Cookie", c),
+    );
+    clearCookieHeader("jm_oauth_host").forEach((c) =>
+      headers.append("Set-Cookie", c),
+    );
+
+    const qs = new URLSearchParams(search);
+
+    // Prefer redirecting back into Shopify Admin embedded context
+    if (adminAppBase) {
+      return redirect(`${adminAppBase}?${qs.toString()}`, { headers });
+    }
+    // Fallback: redirect to your own /app (top-level) if apiKey or shop missing
+    return redirect(`/app?${qs.toString()}`, { headers });
+  };
+
+  if (error) return finish({ judgeme_error: error });
+  if (!code || !state) return finish({ judgeme_error: "missing_params" });
   if (!stateCookie || stateCookie !== state || !shop) {
-    return redirect(`/app?judgeme_error=invalid_state`);
+    return finish({ judgeme_error: "invalid_state" });
   }
 
   const tokenUrl = process.env.JUDGEME_TOKEN_URL!;
@@ -34,7 +68,7 @@ export async function loader({ request }: { request: Request }) {
   const redirectUri = `${process.env.APP_URL}/judgeme/callback`;
 
   try {
-    // Try credentials in body
+    // Attempt 1: send credentials in body (common)
     const form = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -49,7 +83,7 @@ export async function loader({ request }: { request: Request }) {
       body: form,
     });
 
-    // Fallback to HTTP Basic if needed
+    // Attempt 2: retry using HTTP Basic auth if unauthorized
     if (resp.status === 400 || resp.status === 401) {
       const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
       const form2 = new URLSearchParams({
@@ -77,37 +111,24 @@ export async function loader({ request }: { request: Request }) {
       json.access_token || json.token || json?.data?.access_token;
     if (!accessToken) throw new Error("No access_token in response");
 
-    // TODO: save token for this shop (Prisma, etc.)
+    // TODO: persist token for this shop (Prisma, etc.)
     // await saveJudgeMeToken({ shop, token: accessToken });
 
-    // Clear temp cookies and go back to embedded UI
-    const headers = new Headers();
-    clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
-    clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
-    clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
-
-    const params = new URLSearchParams({ judgeme_connected: "1" });
-    if (shop) params.set("shop", shop);
-    if (host) params.set("host", host);
-
-    return redirect(`/app?${params.toString()}`, { headers });
+    // Success: back into Admin embedded app with a success flag
+    const q: Record<string, string> = { judgeme_connected: "1" };
+    if (host) q.host = host;
+    if (shop) q.shop = shop;
+    return finish(q);
   } catch (e: any) {
-    const headers = new Headers();
-    clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
-    clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
-    clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
-
-    const params = new URLSearchParams({
+    const q: Record<string, string> = {
       judgeme_error: e?.message || "oauth_failed",
-    });
-    if (shop) params.set("shop", shop);
-    if (host) params.set("host", host);
-
-    return redirect(`/app?${params.toString()}`, { headers });
+    };
+    if (host) q.host = host;
+    if (shop) q.shop = shop;
+    return finish(q);
   }
 }
 
-/* Optional component (not used if redirecting immediately) */
 export default function Callback() {
   return null;
 }
