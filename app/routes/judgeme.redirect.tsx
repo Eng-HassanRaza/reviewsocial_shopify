@@ -12,6 +12,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // and pass shop via querystring from /app/judgeme/connect instead.
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host");
 
   const appUrl = process.env.APP_URL!;
   const clientId = process.env.JUDGEME_CLIENT_ID!;
@@ -31,6 +33,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Set-Cookie",
     `jm_oauth_shop=${encodeURIComponent(shop)}; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=${tenMins}`
   );
+  if (host) {
+    headers.append(
+      "Set-Cookie",
+      `jm_oauth_host=${encodeURIComponent(host)}; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=${tenMins}`
+    );
+  }
 
   const params = new URLSearchParams({
     client_id: clientId,

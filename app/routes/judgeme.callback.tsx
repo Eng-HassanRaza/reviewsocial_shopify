@@ -23,6 +23,7 @@ export async function loader({ request }: { request: Request }) {
 
   const stateCookie = getCookie(request, "jm_oauth_state");
   const shop = getCookie(request, "jm_oauth_shop");
+  const host = getCookie(request, "jm_oauth_host");
   if (!stateCookie || stateCookie !== state || !shop) {
     return redirect(`/app?judgeme_error=invalid_state`);
   }
@@ -83,15 +84,26 @@ export async function loader({ request }: { request: Request }) {
     const headers = new Headers();
     clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
     clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
-    return redirect(`/app?judgeme_connected=1`, { headers });
+    clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
+
+    const params = new URLSearchParams({ judgeme_connected: "1" });
+    if (shop) params.set("shop", shop);
+    if (host) params.set("host", host);
+
+    return redirect(`/app?${params.toString()}`, { headers });
   } catch (e: any) {
     const headers = new Headers();
     clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
     clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
-    return redirect(
-      `/app?judgeme_error=${encodeURIComponent(e?.message || "oauth_failed")}`,
-      { headers },
-    );
+    clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
+
+    const params = new URLSearchParams({
+      judgeme_error: e?.message || "oauth_failed",
+    });
+    if (shop) params.set("shop", shop);
+    if (host) params.set("host", host);
+
+    return redirect(`/app?${params.toString()}`, { headers });
   }
 }
 
