@@ -5,6 +5,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { generateReviewImage } from "../services/image-generator.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -26,7 +27,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const actionType = formData.get("_action");
   
-  // Handle post review action
   if (actionType === "post_review") {
     const { session } = await authenticate.admin(request);
     
@@ -55,7 +55,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       if (!response.ok) {
         response = await fetch(
-          `${apiBase}/reviews?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}&per_page=1`
+          `${apiBase}/reviews?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}&per_page=10`
         );
       }
 
@@ -70,15 +70,98 @@ export async function action({ request }: ActionFunctionArgs) {
         return { success: false, error: "No reviews found to post" };
       }
 
-      const review = reviews[0];
+      // Find first 5-star review
+      const fiveStarReview = reviews.find((r: any) => r.rating === 5);
       
-      return { 
-        success: false, 
-        error: "Instagram posting requires an image. Feature coming soon!",
-        info: "We're working on generating beautiful review images for Instagram."
+      if (!fiveStarReview) {
+        return { success: false, error: "No 5-star reviews found. Only 5-star reviews are posted to Instagram." };
+      }
+
+      const reviewText = fiveStarReview.body || fiveStarReview.content || "";
+      const reviewerName = fiveStarReview.reviewer?.name || fiveStarReview.reviewer_name || "A Happy Customer";
+      const productTitle = fiveStarReview.product_title || fiveStarReview.product?.title || "";
+
+      // Generate image using Nano Banana API
+      console.log("Attempting to generate review image...");
+      let imageUrl: string | null = null;
+      
+      try {
+        imageUrl = await generateReviewImage({
+          reviewText,
+          rating: fiveStarReview.rating,
+          reviewerName,
+          productTitle,
+        });
+      } catch (error) {
+        console.error("Image generation error:", error);
+        return { 
+          success: false, 
+          error: `Image generation failed: ${error instanceof Error ? error.message : "Unknown error"}. Check server logs for details.`
+        };
+      }
+
+      if (!imageUrl) {
+        return { 
+          success: false, 
+          error: "Failed to generate review image. Please check: 1) GEMINI_API_KEY is set, 2) IMGBB_API_KEY is set (for image hosting), 3) Server logs for detailed error messages" 
+        };
+      }
+
+      // Create Instagram caption
+      const stars = "⭐".repeat(5);
+      const caption = `${stars}\n\n"${reviewText}"\n\n- ${reviewerName}\n\n#customerreview #review #testimonial`;
+
+      const igAccountId = instagramCredential.instagramAccountId;
+      const accessToken = instagramCredential.accessToken;
+
+      // Step 1: Create media container
+      const containerUrl = `https://graph.facebook.com/v18.0/${igAccountId}/media`;
+      const containerParams = new URLSearchParams({
+        image_url: imageUrl,
+        caption: caption,
+        access_token: accessToken,
+      });
+
+      const containerResp = await fetch(containerUrl, {
+        method: "POST",
+        body: containerParams,
+      });
+
+      if (!containerResp.ok) {
+        const errorText = await containerResp.text();
+        return { success: false, error: `Failed to create media container: ${errorText}` };
+      }
+
+      const containerData = await containerResp.json();
+      const containerId = containerData.id;
+
+      // Step 2: Publish the media
+      const publishUrl = `https://graph.facebook.com/v18.0/${igAccountId}/media_publish`;
+      const publishParams = new URLSearchParams({
+        creation_id: containerId,
+        access_token: accessToken,
+      });
+
+      const publishResp = await fetch(publishUrl, {
+        method: "POST",
+        body: publishParams,
+      });
+
+      if (!publishResp.ok) {
+        const errorText = await publishResp.text();
+        return { success: false, error: `Failed to publish media: ${errorText}` };
+      }
+
+      const publishData = await publishResp.json();
+
+      return {
+        success: true,
+        message: "Review posted to Instagram successfully!",
+        postId: publishData.id,
       };
 
     } catch (error) {
+      console.error("Error posting to Instagram:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error occurred"
