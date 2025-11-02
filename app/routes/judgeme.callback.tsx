@@ -1,5 +1,6 @@
 // app/routes/judgeme.callback.tsx
 import { redirect } from "react-router";
+import prisma from "../db.server";
 
 export const handle = { isPublic: true };
 
@@ -111,17 +112,22 @@ export async function loader({ request }: { request: Request }) {
       json.access_token || json.token || json?.data?.access_token;
     if (!accessToken) throw new Error("No access_token in response");
 
-    // TODO: persist token for this shop (Prisma, etc.)
-    // await saveJudgeMeToken({ shop, token: accessToken });
+    await prisma.judgeMeCredential.upsert({
+      where: { shop },
+      update: { accessToken },
+      create: { shop, accessToken },
+    });
 
     // Success: back into Admin embedded app with a success flag
     const q: Record<string, string> = { judgeme_connected: "1" };
     if (host) q.host = host;
     if (shop) q.shop = shop;
     return finish(q);
-  } catch (e: any) {
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "oauth_failed";
     const q: Record<string, string> = {
-      judgeme_error: e?.message || "oauth_failed",
+      judgeme_error: message,
     };
     if (host) q.host = host;
     if (shop) q.shop = shop;

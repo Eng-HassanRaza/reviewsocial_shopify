@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import type { ShopifyGlobal } from "@shopify/app-bridge-types";
 
 /**
  * Loader: Authenticates the shop, then returns the top-level redirect URL.
@@ -31,23 +32,21 @@ export default function JudgeMeConnect() {
     if (!topRedirect) return;
 
     try {
-      // App Bridge v4 navigation API
-      // @ts-ignore
-      if (app?.navigation?.navigate) {
-        // @ts-ignore
-        app.navigation.navigate(topRedirect);
+      const bridge = app as ShopifyGlobal & {
+        navigation?: { navigate?: (url: string) => void };
+        redirect?: (url: string) => void;
+      };
+
+      if (typeof bridge.navigation?.navigate === "function") {
+        bridge.navigation.navigate(topRedirect);
         return;
       }
 
-      // Some older versions expose app.redirect()
-      // @ts-ignore
-      if (typeof app?.redirect === "function") {
-        // @ts-ignore
-        app.redirect(topRedirect);
+      if (typeof bridge.redirect === "function") {
+        bridge.redirect(topRedirect);
         return;
       }
 
-      // Fallback
       window.open(topRedirect, "_top");
     } catch (err) {
       console.error("Top-level redirect failed", err);

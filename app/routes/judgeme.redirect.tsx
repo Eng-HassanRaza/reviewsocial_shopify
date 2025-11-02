@@ -37,6 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     response_type: "code",
     scope,
     state,
+    approval_prompt: "force", // Force authorization prompt every time
   });
 
   return redirect(`${authBase}?${params.toString()}`, { headers });
