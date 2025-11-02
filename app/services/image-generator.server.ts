@@ -3,6 +3,8 @@ export interface ReviewImageData {
   rating: number;
   reviewerName?: string;
   productTitle?: string;
+  brandName?: string;
+  tagline?: string;
 }
 
 export async function generateReviewImage(
@@ -116,19 +118,15 @@ export async function generateReviewImage(
 
 function createImagePrompt(reviewData: ReviewImageData): string {
   const stars = "⭐".repeat(reviewData.rating);
+  const brandName = reviewData.brandName || "Our Store";
+  const tagline = reviewData.tagline || (reviewData.rating === 5 ? "Trusted by Happy Customers" : "Quality You Can Trust");
   
-  return `Create a modern and engaging social media post image for displaying a ${reviewData.rating}-star customer review.
-The image should be visually appealing, clean, and professional - perfect for Instagram and Facebook.
+  return `Create a modern, engaging social media post image for an electronics brand called ${brandName}.
+The image should visually display a ${reviewData.rating}-star customer review in a clean, professional layout suitable for Instagram and Facebook.
 
-DESIGN REQUIREMENTS:
-- Square format: 1080x1080px
-- Modern, minimalistic design with a gradient or solid color background
-- Use vibrant but professional colors (blues, purples, or warm gradients)
-- Professional typography with good hierarchy
-- Clean spacing and layout
+Include these text elements clearly and attractively:
 
-CONTENT TO DISPLAY:
-Star Rating: ${stars} (${reviewData.rating} stars)
+${stars}
 
 Customer Name: ${reviewData.reviewerName || "A Happy Customer"}
 
@@ -136,17 +134,28 @@ Review Text:
 "${reviewData.reviewText}"
 
 ${reviewData.productTitle ? `Product: ${reviewData.productTitle}\n` : ''}
-VISUAL STYLE:
-- Place the star rating prominently at the top
-- Display the review text in large, readable font with quote marks
-- Show customer name at the bottom with attribution style
-${reviewData.productTitle ? `- Include product name in subtle styling\n` : ''}- Use modern, clean typography
-- Ensure all text is highly readable
-- Add subtle shadows or glows for depth
-- Make it Instagram-ready and shareable
-- Professional and trustworthy appearance
+Branding:
 
-The final image should look like a high-quality customer testimonial that would perform well on social media.`;
+Add the brand name "${brandName}" prominently at the top or bottom of the image.
+${reviewData.productTitle ? `Include a small product representation or icon for "${reviewData.productTitle}" near the review text.\n` : ''}
+Highlight the tagline "${tagline}" using modern, stylish typography.
+
+Design Style:
+
+Modern, minimalistic, and tech-oriented.
+
+Use subtle gradients or dark-themed backgrounds with electric blue or glowing accents to symbolize energy or innovation.
+
+Ensure excellent readability for all text with proper contrast.
+
+Visually emphasize the ${reviewData.rating}-star rating and customer satisfaction.
+
+Use professional typography with clear hierarchy (stars at top, review text prominent, customer name at bottom).
+
+Make it suitable for Instagram square format (1080x1080px).
+
+Goal:
+Create a visually appealing and trustworthy post that reflects a premium yet approachable brand, highlighting authentic customer appreciation. The design should be eye-catching, shareable, and convey credibility and professionalism.`;
 }
 
 async function uploadImageToStorage(

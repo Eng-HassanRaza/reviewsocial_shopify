@@ -80,9 +80,18 @@ export async function action({ request }: ActionFunctionArgs) {
       const reviewText = fiveStarReview.body || fiveStarReview.content || "";
       const reviewerName = fiveStarReview.reviewer?.name || fiveStarReview.reviewer_name || "A Happy Customer";
       const productTitle = fiveStarReview.product_title || fiveStarReview.product?.title || "";
+      
+      // Extract brand name from shop domain (e.g., "mystore.myshopify.com" -> "MyStore")
+      const shopDomain = session.shop;
+      const brandName = shopDomain
+        .replace('.myshopify.com', '')
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
 
       // Generate image using Nano Banana API
       console.log("Attempting to generate review image...");
+      console.log("Brand name for image:", brandName);
       let imageUrl: string | null = null;
       
       try {
@@ -91,6 +100,7 @@ export async function action({ request }: ActionFunctionArgs) {
           rating: fiveStarReview.rating,
           reviewerName,
           productTitle,
+          brandName,
         });
       } catch (error) {
         console.error("Image generation error:", error);
