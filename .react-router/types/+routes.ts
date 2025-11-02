@@ -46,12 +46,15 @@ type Pages = {
   "/app/additional": {
     params: {};
   };
+  "/app/reviews": {
+    params: {};
+  };
 };
 
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/judgeme/disconnect" | "/app/judgeme/connect" | "/app/additional";
+    page: "/" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/judgeme/disconnect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
   };
   "routes/webhooks.app.scopes_update.tsx": {
     id: "routes/webhooks.app.scopes_update";
@@ -83,7 +86,7 @@ type RouteFiles = {
   };
   "routes/app.tsx": {
     id: "routes/app";
-    page: "/app" | "/app/judgeme/disconnect" | "/app/judgeme/connect" | "/app/additional";
+    page: "/app" | "/app/judgeme/disconnect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
   };
   "routes/app.judgeme.disconnect.tsx": {
     id: "routes/app.judgeme.disconnect";
@@ -96,6 +99,10 @@ type RouteFiles = {
   "routes/app.additional.tsx": {
     id: "routes/app.additional";
     page: "/app/additional";
+  };
+  "routes/app.reviews.tsx": {
+    id: "routes/app.reviews";
+    page: "/app/reviews";
   };
   "routes/app._index.tsx": {
     id: "routes/app._index";
@@ -116,5 +123,6 @@ type RouteModules = {
   "routes/app.judgeme.disconnect": typeof import("./app/routes/app.judgeme.disconnect.tsx");
   "routes/app.judgeme.connect": typeof import("./app/routes/app.judgeme.connect.tsx");
   "routes/app.additional": typeof import("./app/routes/app.additional.tsx");
+  "routes/app.reviews": typeof import("./app/routes/app.reviews.tsx");
   "routes/app._index": typeof import("./app/routes/app._index.tsx");
 };

@@ -42,11 +42,18 @@ export default function Index() {
       <s-section heading="Integrations">
         <s-paragraph>Connect your Judge.me account to enable reviews.</s-paragraph>
         {isConnected ? (
-          <Form method="post" action="/app/judgeme/disconnect">
-            <s-button variant="tertiary" type="submit">
-              Disconnect Judge.me
-            </s-button>
-          </Form>
+          <>
+            <Form method="post" action="/app/judgeme/disconnect">
+              <s-button variant="tertiary" type="submit">
+                Disconnect Judge.me
+              </s-button>
+            </Form>
+            <div style={{ marginTop: "10px" }}>
+              <s-button href="/app/reviews">
+                Test Fetch Reviews
+              </s-button>
+            </div>
+          </>
         ) : (
           <s-button variant="primary" href="/app/judgeme/connect">
             Connect to Judge.me
