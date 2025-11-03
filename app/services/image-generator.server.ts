@@ -1,3 +1,6 @@
+import OpenAI from 'openai';
+import sharp from 'sharp';
+
 export interface ReviewImageData {
   reviewText: string;
   rating: number;
@@ -12,6 +15,7 @@ export async function generateReviewImage(
 ): Promise<string | null> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const imgbbApiKey = process.env.IMGBB_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
   
   if (!geminiApiKey) {
     console.error("GEMINI_API_KEY not configured");
@@ -23,20 +27,32 @@ export async function generateReviewImage(
     return null;
   }
   
+  if (!openaiApiKey) {
+    console.error("OPENAI_API_KEY not configured");
+    return null;
+  }
+  
   try {
-    console.log("Generating image with Gemini REST API...");
+    console.log("Step 1: Generating dynamic prompt with GPT-4o-mini...");
+    const imagePrompt = await generateDynamicPrompt(reviewData, openaiApiKey);
+    
+    if (!imagePrompt) {
+      console.error("Failed to generate prompt with GPT-4o-mini");
+      return null;
+    }
+    
+    console.log("Step 2: Generating image with Gemini using AI-generated prompt...");
+    console.log("Prompt preview:", imagePrompt.substring(0, 200) + "...");
+    console.log("Full prompt length:", imagePrompt.length, "characters");
     
     const model = 'gemini-2.5-flash-image';
-    const prompt = createImagePrompt(reviewData);
-    
-    console.log("Prompt preview:", prompt.substring(0, 200) + "...");
     
     const requestBody = {
       contents: [
         {
           parts: [
             {
-              text: prompt,
+              text: imagePrompt,
             },
           ],
         },
@@ -98,11 +114,23 @@ export async function generateReviewImage(
     const base64Image = imagePart.inlineData.data;
     const mimeType = imagePart.inlineData.mimeType;
     
-    console.log("Image MIME type:", mimeType);
-    console.log("Image data length:", base64Image.length);
+    console.log("Original image MIME type:", mimeType);
+    console.log("Original image data length:", base64Image.length);
     
-    // Upload to ImgBB
-    const imageUrl = await uploadImageToStorage(base64Image, mimeType);
+    // Step 3: Optimize image for Instagram
+    console.log("Optimizing image for Instagram...");
+    const optimizedImageBase64 = await optimizeImageForInstagram(base64Image);
+    
+    if (!optimizedImageBase64) {
+      console.error("Failed to optimize image");
+      return null;
+    }
+    
+    console.log("✓ Image optimized (JPEG, 1080x1080)");
+    
+    // Step 4: Upload to ImgBB
+    console.log("Step 4: Uploading optimized image to ImgBB...");
+    const imageUrl = await uploadImageToStorage(optimizedImageBase64, 'image/jpeg');
     
     return imageUrl;
   } catch (error) {
@@ -116,46 +144,121 @@ export async function generateReviewImage(
   }
 }
 
-function createImagePrompt(reviewData: ReviewImageData): string {
-  const stars = "⭐".repeat(reviewData.rating);
-  const brandName = reviewData.brandName || "Our Store";
-  const tagline = reviewData.tagline || (reviewData.rating === 5 ? "Trusted by Happy Customers" : "Quality You Can Trust");
-  
-  return `Create a modern, engaging social media post image for an electronics brand called ${brandName}.
-The image should visually display a ${reviewData.rating}-star customer review in a clean, professional layout suitable for Instagram and Facebook.
+async function optimizeImageForInstagram(base64Image: string): Promise<string | null> {
+  try {
+    const imageBuffer = Buffer.from(base64Image, 'base64');
+    
+    // Optimize image for Instagram:
+    // - Convert to JPEG (better compression, Instagram-friendly)
+    // - Resize to exactly 1080x1080 (Instagram square format)
+    // - Quality 85 (good balance of quality and file size)
+    // - Remove metadata to reduce size
+    const optimizedBuffer = await sharp(imageBuffer)
+      .resize(1080, 1080, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .jpeg({
+        quality: 85,
+        mozjpeg: true // Better compression
+      })
+      .toBuffer();
+    
+    const fileSizeKB = Math.round(optimizedBuffer.length / 1024);
+    console.log(`Optimized image size: ${fileSizeKB} KB`);
+    
+    // Instagram recommends images under 8MB, ideally under 1MB
+    if (fileSizeKB > 8000) {
+      console.warn(`Warning: Image size (${fileSizeKB} KB) is quite large`);
+    }
+    
+    return optimizedBuffer.toString('base64');
+  } catch (error) {
+    console.error("Error optimizing image:", error);
+    return null;
+  }
+}
 
-Include these text elements clearly and attractively:
+async function generateDynamicPrompt(
+  reviewData: ReviewImageData,
+  openaiApiKey: string
+): Promise<string | null> {
+  try {
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+    
+    const stars = "⭐".repeat(reviewData.rating);
+    const brandName = reviewData.brandName || "Our Store";
+    const tagline = reviewData.tagline || (reviewData.rating === 5 ? "Trusted by Happy Customers" : "Quality You Can Trust");
+    
+    const metaPrompt = `You are an expert at creating image generation prompts for social media marketing.
 
-${stars}
+Your task: Analyze the product and brand information below, then create a detailed, optimized prompt for an AI image generator (Gemini) to create a stunning Instagram/Facebook review post image.
 
-Customer Name: ${reviewData.reviewerName || "A Happy Customer"}
+PRODUCT/BRAND INFORMATION:
+- Brand Name: ${brandName}
+- Product: ${reviewData.productTitle || "Not specified"}
+- Review Rating: ${reviewData.rating} stars
+- Reviewer Name: ${reviewData.reviewerName || "A Happy Customer"}
+- Review Text: "${reviewData.reviewText}"
+- Tagline: ${tagline}
 
-Review Text:
-"${reviewData.reviewText}"
+YOUR TASK:
+1. Identify the product category/niche (e.g., fashion, electronics, baby products, pet supplies, food, sports, beauty, home decor, etc.)
+2. Create a design theme that matches the product category (colors, style, visual elements)
+3. Generate a complete image generation prompt that includes:
+   - The EXACT review text (copy it character-by-character without changes)
+   - Brand name and tagline
+   - Stars (${stars})
+   - Reviewer name
+   - Category-appropriate design style, colors, and visual elements
+   - Product-related imagery or icons
+   - Layout specifications (1080x1080px Instagram square format)
+   - Optimization for fast loading and web delivery
 
-${reviewData.productTitle ? `Product: ${reviewData.productTitle}\n` : ''}
-Branding:
+CRITICAL REQUIREMENTS:
+- The review text MUST be copied EXACTLY as provided: "${reviewData.reviewText}"
+- Do NOT change, summarize, or paraphrase any part of the review text
+- Include multiple reminders in the prompt about text accuracy
+- Make the design theme specific to the detected product category
+- Use appropriate colors, visual elements, and style for the niche
+- Request the image to be optimized for web/social media (reasonable file size, fast loading)
+- Specify clean, simple designs that compress well
 
-Add the brand name "${brandName}" prominently at the top or bottom of the image.
-${reviewData.productTitle ? `Include a small product representation or icon for "${reviewData.productTitle}" near the review text.\n` : ''}
-Highlight the tagline "${tagline}" using modern, stylish typography.
+Output only the final image generation prompt (not your analysis). The prompt should be ready to send directly to an image generation AI.`;
 
-Design Style:
+    console.log("Calling GPT-4o-mini for prompt generation...");
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at creating highly effective, detailed prompts for AI image generators. You specialize in e-commerce and social media marketing visuals."
+        },
+        {
+          role: "user",
+          content: metaPrompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
 
-Modern, minimalistic, and tech-oriented.
-
-Use subtle gradients or dark-themed backgrounds with electric blue or glowing accents to symbolize energy or innovation.
-
-Ensure excellent readability for all text with proper contrast.
-
-Visually emphasize the ${reviewData.rating}-star rating and customer satisfaction.
-
-Use professional typography with clear hierarchy (stars at top, review text prominent, customer name at bottom).
-
-Make it suitable for Instagram square format (1080x1080px).
-
-Goal:
-Create a visually appealing and trustworthy post that reflects a premium yet approachable brand, highlighting authentic customer appreciation. The design should be eye-catching, shareable, and convey credibility and professionalism.`;
+    const generatedPrompt = completion.choices[0]?.message?.content;
+    
+    if (!generatedPrompt) {
+      console.error("No prompt generated by GPT-4o-mini");
+      return null;
+    }
+    
+    console.log("✓ Dynamic prompt generated successfully");
+    console.log("Generated prompt length:", generatedPrompt.length);
+    
+    return generatedPrompt;
+  } catch (error) {
+    console.error("Error generating dynamic prompt with GPT-4o-mini:", error);
+    return null;
+  }
 }
 
 async function uploadImageToStorage(

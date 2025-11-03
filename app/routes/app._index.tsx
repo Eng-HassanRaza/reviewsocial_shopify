@@ -142,6 +142,19 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
+      // Verify image URL is accessible before posting to Instagram
+      console.log("Verifying image URL is accessible...");
+      const isImageAccessible = await verifyImageUrl(imageUrl);
+      
+      if (!isImageAccessible) {
+        return {
+          success: false,
+          error: "Image uploaded but not accessible. Please try again in a moment."
+        };
+      }
+      
+      console.log("✓ Image verified and accessible");
+
       // Create Instagram caption
       const stars = "⭐".repeat(5);
       const caption = `${stars}\n\n"${reviewText}"\n\n- ${reviewerName}\n\n#customerreview #review #testimonial`;
@@ -150,6 +163,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const accessToken = instagramCredential.accessToken;
 
       // Step 1: Create media container
+      console.log("Creating Instagram media container...");
       const containerUrl = `https://graph.facebook.com/v18.0/${igAccountId}/media`;
       const containerParams = new URLSearchParams({
         image_url: imageUrl,
@@ -205,6 +219,48 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   return { success: false, error: "Invalid action" };
+}
+
+// Helper function to verify image URL is accessible
+async function verifyImageUrl(imageUrl: string, maxRetries = 3): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      console.log(`Attempt ${i + 1}/${maxRetries}: Checking if image is accessible...`);
+      
+      const response = await fetch(imageUrl, { method: 'HEAD' });
+      
+      if (response.ok) {
+        const contentType = response.headers.get('content-type');
+        const contentLength = response.headers.get('content-length');
+        
+        console.log(`✓ Image accessible (${contentType}, ${contentLength} bytes)`);
+        
+        // Verify it's actually an image
+        if (contentType && contentType.startsWith('image/')) {
+          return true;
+        }
+        
+        console.warn(`Warning: Content-Type is ${contentType}, not an image`);
+      }
+      
+      // If not successful, wait before retry
+      if (i < maxRetries - 1) {
+        const waitTime = (i + 1) * 1000; // 1s, 2s, 3s
+        console.log(`Image not ready, waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    } catch (error) {
+      console.error(`Error verifying image URL (attempt ${i + 1}):`, error);
+      
+      if (i < maxRetries - 1) {
+        const waitTime = (i + 1) * 1000;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  console.error(`Failed to verify image URL after ${maxRetries} attempts`);
+  return false;
 }
 
 export default function Index() {
