@@ -1,226 +1,412 @@
-# Shopify App Template - React Router
+# ReviewSocial - Shopify App
 
-This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using [React Router](https://reactrouter.com/).  It was forked from the [Shopify Remix app template](https://github.com/Shopify/shopify-app-template-remix) and converted to React Router.
+Automatically turn 5-star Judge.me reviews into beautiful Instagram posts with AI-generated images.
 
-Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).
+## 🚀 Features
 
-Visit the [`shopify.dev` documentation](https://shopify.dev/docs/api/shopify-app-react-router) for more details on the React Router app package.
+- **Automatic Review Posting**: Converts 5-star reviews into Instagram posts
+- **AI-Generated Images**: Uses Google Gemini + OpenAI GPT-4o-mini for dynamic, niche-specific image generation
+- **Judge.me Integration**: Seamlessly fetches reviews from Judge.me
+- **Instagram Business Integration**: Posts directly to Instagram Business accounts
+- **Auto-Post System**: Cron job support for automatic posting every 2 hours
+- **Duplicate Prevention**: Never posts the same review twice
+- **Rate Limiting**: Max 10 posts per day per shop
+- **GDPR Compliant**: Full GDPR webhook support
+- **Dashboard**: View all posted reviews with stats and Instagram links
 
-## Upgrading from Remix
+---
 
-If you have an existing Remix app that you want to upgrade to React Router, please follow the [upgrade guide](https://github.com/Shopify/shopify-app-template-react-router/wiki/Upgrading-from-Remix).  Otherwise, please follow the quick start guide below.
+## 📋 Prerequisites
 
-## Quick start
+Before you begin, you'll need:
 
-### Prerequisites
+1. **Node.js** (v18 or higher): [Download](https://nodejs.org/)
+2. **Shopify Partner Account**: [Create account](https://partners.shopify.com/signup)
+3. **Shopify Development Store**: [Create store](https://help.shopify.com/en/partners/dashboard/development-stores)
+4. **Judge.me Account**: [Sign up](https://judge.me/)
+5. **Judge.me OAuth App**: [Create OAuth app](https://judge.me/admin/apps/oauth)
+6. **Facebook/Instagram Business Account**: [Setup guide](https://business.facebook.com/)
+7. **Facebook Developer App**: [Create app](https://developers.facebook.com/apps)
+8. **Google Gemini API Key**: [Get key](https://makersuite.google.com/app/apikey)
+9. **OpenAI API Key**: [Get key](https://platform.openai.com/api-keys)
+10. **AWS Account with S3**: [Create account](https://aws.amazon.com/)
 
-Before you begin, you'll need the following:
+---
 
-1. **Node.js**: [Download and install](https://nodejs.org/en/download/) it if you haven't already.
-2. **Shopify Partner Account**: [Create an account](https://partners.shopify.com/signup) if you don't have one.
-3. **Test Store**: Set up either a [development store](https://help.shopify.com/en/partners/dashboard/development-stores#create-a-development-store) or a [Shopify Plus sandbox store](https://help.shopify.com/en/partners/dashboard/managing-stores/plus-sandbox-store) for testing your app.
-4. **Shopify CLI**: [Download and install](https://shopify.dev/docs/apps/tools/cli/getting-started) it if you haven't already.
-```shell
-npm install -g @shopify/cli@latest
+## 🛠️ Installation
+
+### 1. Clone and Install
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/reviewsocial.git
+cd reviewsocial
+
+# Install dependencies
+npm install
+
+# Set up database
+npm run setup
 ```
 
-### Setup
+### 2. Configure Environment Variables
 
-```shell
-shopify app init --template=https://github.com/Shopify/shopify-app-template-react-router
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit .env with your credentials
+nano .env
 ```
 
-### Local Development
+**Required environment variables:**
+- `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` - From Shopify Partner Dashboard
+- `APP_URL` - Your production URL (or Cloudflare tunnel for dev)
+- `JUDGEME_CLIENT_ID`, `JUDGEME_CLIENT_SECRET` - From Judge.me OAuth app
+- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` - From Facebook Developer app
+- `GEMINI_API_KEY` - From Google AI Studio
+- `OPENAI_API_KEY` - From OpenAI Platform
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` - From AWS Console
 
-```shell
+See [`.env.example`](./.env.example) for complete list.
+
+### 3. Set Up AWS S3
+
+Follow the [AWS S3 Setup Guide](./AWS_S3_SETUP.md) to:
+1. Create an S3 bucket
+2. Configure public access
+3. Create IAM user with S3 permissions
+4. Get access keys
+
+### 4. Start Development Server
+
+```bash
+# Using Shopify CLI
 shopify app dev
+
+# Or using npm
+npm run dev
 ```
 
-Press P to open the URL to your app. Once you click install, you can start development.
+Press **P** to open the app URL in your browser.
 
-Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your partners account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
+---
 
-### Authenticating and querying data
+## 📖 How It Works
 
-To authenticate and query data you can use the `shopify` const that is exported from `/app/shopify.server.js`:
+### User Flow:
 
-```js
-export async function loader({ request }) {
-  const { admin } = await shopify.authenticate.admin(request);
+1. **Merchant installs ReviewSocial** from Shopify App Store
+2. **Connects Judge.me account** via OAuth
+3. **Connects Instagram Business account** via Facebook OAuth
+4. **Reviews are automatically processed**:
+   - New 5-star review is created on Judge.me
+   - ReviewSocial fetches the review (via webhook or cron)
+   - AI generates a beautiful, niche-specific image
+   - Image is uploaded to AWS S3
+   - Post is published to Instagram automatically
 
-  const response = await admin.graphql(`
-    {
-      products(first: 25) {
-        nodes {
-          title
-          description
-        }
-      }
-    }`);
+### Technical Flow:
 
-  const {
-    data: {
-      products: { nodes },
-    },
-  } = await response.json();
+```
+Customer Review (5⭐)
+  → Judge.me Webhook (optional) / Cron Job (every 2 hours)
+    → Fetch Review Data
+      → Generate AI Prompt (OpenAI GPT-4o-mini)
+        → Generate Image (Google Gemini)
+          → Optimize Image (Sharp)
+            → Upload to S3 (AWS)
+              → Post to Instagram (Facebook Graph API)
+                → Save to Database (PostedReview)
+```
 
-  return nodes;
+---
+
+## 🔄 Auto-Post System
+
+### Option 1: GitHub Actions (Free!)
+
+The app includes a GitHub Actions workflow that runs every 2 hours:
+
+```bash
+# Already created at: .github/workflows/auto-post.yml
+```
+
+**Setup:**
+1. Push code to GitHub
+2. Add GitHub secrets:
+   - `APP_URL`: Your production URL
+   - `CRON_SECRET`: Random secret (optional)
+3. Workflow runs automatically every 2 hours
+
+### Option 2: Manual Trigger
+
+Use the "Check for New Reviews Now" button in the app dashboard.
+
+### Option 3: Webhooks (Requires Judge.me Awesome Plan)
+
+- Webhooks are automatically registered when connecting Judge.me
+- Reviews post in real-time when created
+- Free for development stores
+
+See [CRON_SETUP.md](./CRON_SETUP.md) for more options.
+
+---
+
+## 🔒 GDPR Compliance
+
+The app includes full GDPR webhook support:
+
+- **`customers/data_request`**: Returns customer data
+- **`customers/redact`**: Deletes customer data
+- **`shop/redact`**: Deletes all shop data 48 hours after uninstall
+
+All webhooks are automatically registered by Shopify.
+
+---
+
+## 🎨 Customization
+
+### Image Generation
+
+The AI dynamically adapts to:
+- Store niche (electronics, fashion, pet supplies, etc.)
+- Product category
+- Review content
+- Brand identity
+
+Images include:
+- 5-star rating
+- Customer name
+- Review text
+- Product title
+- Brand name
+- Niche-specific design theme
+
+### Rate Limits
+
+Adjust in `app/services/auto-post-cron.server.ts`:
+
+```typescript
+const MAX_POSTS_PER_DAY = 10;  // Change to your preference
+const MAX_POSTS_PER_RUN = 5;   // Change to your preference
+```
+
+---
+
+## 📊 Database Schema
+
+```prisma
+model Session {
+  // Shopify session management
+}
+
+model JudgeMeCredential {
+  shop        String   @id
+  accessToken String
+  webhookId   String?
+}
+
+model InstagramCredential {
+  shop               String   @id
+  accessToken        String
+  instagramAccountId String
+}
+
+model PostedReview {
+  id              String   @id
+  shop            String
+  reviewId        String   // Unique constraint
+  productTitle    String?
+  reviewerName    String?
+  rating          Int
+  reviewText      String?
+  instagramPostId String?
+  imageUrl        String?
+  status          String   // "success" or "failed"
+  error           String?
+  postedAt        DateTime
+  
+  @@unique([shop, reviewId])
 }
 ```
 
-This template comes pre-configured with examples of:
+---
 
-1. Setting up your Shopify app in [/app/shopify.server.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/shopify.server.ts)
-2. Querying data using Graphql. Please see: [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx).
-3. Responding to webhooks. Please see [/app/routes/webhooks.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/webhooks.app.uninstalled.tsx).
+## 🚀 Deployment
 
-Please read the [documentation for @shopify/shopify-app-react-router](https://shopify.dev/docs/api/shopify-app-react-router) to see what other API's are available.
+### Production Checklist
 
-## Shopify Dev MCP
+Before deploying to production:
 
-This template is configured with the Shopify Dev MCP. This instructs [Cursor](https://cursor.com/), [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://claude.com/product/claude-code) and [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) to use the Shopify Dev MCP.  
+#### 1. Legal Pages (REQUIRED)
+Create these pages on your domain:
+- `https://yourdomain.com/privacy-policy`
+- `https://yourdomain.com/terms-of-service`
+- `https://yourdomain.com/support`
 
-For more information on the Shopify Dev MCP please read [the  documentation](https://shopify.dev/docs/apps/build/devmcp).
-
-## Deployment
-
-### Application Storage
-
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
-
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-Here’s a short list of databases providers that provide a free tier to get started:
-
-| Database   | Type             | Hosters                                                                                                                                                                                                                               |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MySQL      | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mysql), [Planet Scale](https://planetscale.com/), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/mysql) |
-| PostgreSQL | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-postgresql), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres)                                   |
-| Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
-| MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
-
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
-
-### Build
-
-Build the app by running the command below with the package manager of your choice:
-
-Using yarn:
-
-```shell
-yarn build
+Update URLs in `.env`:
+```bash
+PRIVACY_POLICY_URL=https://yourdomain.com/privacy-policy
+TERMS_OF_SERVICE_URL=https://yourdomain.com/terms-of-service
+SUPPORT_URL=https://yourdomain.com/support
+SUPPORT_EMAIL=support@yourdomain.com
 ```
 
-Using npm:
+#### 2. Database
+Switch from SQLite to PostgreSQL for production:
 
-```shell
-npm run build
+```bash
+# Update DATABASE_URL in .env
+DATABASE_URL=postgresql://user:password@host:5432/database
+
+# Run migrations
+npx prisma migrate deploy
 ```
 
-Using pnpm:
+#### 3. Deploy to Hosting
 
-```shell
-pnpm run build
+**Railway (Recommended):**
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login and deploy
+railway login
+railway up
 ```
 
-## Hosting
+**Other options:**
+- Render
+- Heroku
+- Fly.io
+- Vercel (with database hosting)
 
-When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/deployment/web) to host your app on a cloud provider like [Heroku](https://www.heroku.com/) or [Fly.io](https://fly.io/).
+#### 4. Set Up Cron
 
-When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
-
-
-## Gotchas / Troubleshooting
-
-### Database tables don't exist
-
-If you get an error like:
-
+Configure GitHub Actions or your hosting provider's cron service to call:
 ```
-The table `main.Session` does not exist in the current database.
+POST https://your-app.com/api/cron/auto-post
 ```
 
-Create the database for Prisma. Run the `setup` script in `package.json` using `npm`, `yarn` or `pnpm`.
+See [CRON_SETUP.md](./CRON_SETUP.md) for detailed instructions.
 
-### Navigating/redirecting breaks an embedded app
+---
 
-Embedded apps must maintain the user session, which can be tricky inside an iFrame. To avoid issues:
+## 📝 Shopify App Store Submission
 
-1. Use `Link` from `react-router` or `@shopify/polaris`. Do not use `<a>`.
-2. Use `redirect` returned from `authenticate.admin`. Do not use `redirect` from `react-router`
-3. Use `useSubmit` from `react-router`.
+### Pre-Submission Checklist
 
-This only applies if your app is embedded, which it will be by default.
+- [x] GDPR webhooks implemented
+- [x] App uninstall webhook cleanup
+- [x] Legal pages created (privacy policy, terms, support)
+- [x] Footer with legal links
+- [x] Error handling
+- [x] Rate limiting
+- [ ] App listing content (screenshots, description)
+- [ ] App icon (1200×1200px)
+- [ ] Test on multiple stores
+- [ ] Production deployment
+- [ ] Billing integration (if charging)
 
-### Webhooks: shop-specific webhook subscriptions aren't updated
+### Submission Steps
 
-If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.  
+1. **Complete app listing** in Shopify Partner Dashboard
+2. **Add screenshots** (minimum 5, 1280×800px)
+3. **Add app icon** (1200×1200px)
+4. **Write description** (what it does, benefits, requirements)
+5. **Set pricing** (if applicable)
+6. **Add legal page URLs**
+7. **Submit for review**
 
-Instead of using the `afterAuth` hook declare app-specific webhooks in the `shopify.app.toml` file.  This approach is easier since Shopify will automatically sync changes every time you run `deploy` (e.g: `npm run deploy`).  Please read these guides to understand more:
+Approval typically takes 5-7 business days.
 
-1. [app-specific vs shop-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions)
-2. [Create a subscription tutorial](https://shopify.dev/docs/apps/build/webhooks/subscribe/get-started?deliveryMethod=https)
+---
 
-If you do need shop-specific webhooks, keep in mind that the package calls `afterAuth` in 2 scenarios:
+## 🧪 Testing
 
-- After installing the app
-- When an access token expires
+### Run Tests
+```bash
+npm test
+```
 
-During normal development, the app won't need to re-authenticate most of the time, so shop-specific subscriptions aren't updated. To force your app to update the subscriptions, uninstall and reinstall the app. Revisiting the app will call the `afterAuth` hook.
+### Manual Testing Checklist
 
-### Webhooks: Admin created webhook failing HMAC validation
+- [ ] Install app on development store
+- [ ] Connect Judge.me account
+- [ ] Connect Instagram Business account
+- [ ] Create 5-star review on Judge.me
+- [ ] Trigger auto-post (button or cron)
+- [ ] Verify image generated and uploaded to S3
+- [ ] Verify post appears on Instagram
+- [ ] Check "Posted Reviews" dashboard
+- [ ] Verify duplicate prevention works
+- [ ] Test rate limiting (try posting >10 in one day)
+- [ ] Test uninstall cleanup
+- [ ] Test app reinstall
 
-Webhooks subscriptions created in the [Shopify admin](https://help.shopify.com/en/manual/orders/notifications/webhooks) will fail HMAC validation. This is because the webhook payload is not signed with your app's secret key.  
+---
 
-The recommended solution is to use [app-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions) defined in your toml file instead.  Test your webhooks by triggering events manually in the Shopify admin(e.g. Updating the product title to trigger a `PRODUCTS_UPDATE`).
+## 🐛 Troubleshooting
 
-### Webhooks: Admin object undefined on webhook events triggered by the CLI
+### Image generation fails
+- Check `GEMINI_API_KEY` and `OPENAI_API_KEY` are set
+- Check AWS S3 credentials are correct
+- Check S3 bucket has public read access
 
-When you trigger a webhook event using the Shopify CLI, the `admin` object will be `undefined`. This is because the CLI triggers an event with a valid, but non-existent, shop. The `admin` object is only available when the webhook is triggered by a shop that has installed the app.  This is expected.
+### Instagram post fails
+- Verify Instagram Business account is connected (not personal)
+- Check Facebook app has `instagram_basic`, `instagram_content_publish`, and `pages_read_engagement` permissions
+- Ensure image is accessible from S3 URL
+- Check Instagram API error messages in logs
 
-Webhooks triggered by the CLI are intended for initial experimentation testing of your webhook configuration. For more information on how to test your webhooks, see the [Shopify CLI documentation](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger).
+### Judge.me connection fails
+- Ensure Judge.me is installed on the store
+- Verify OAuth credentials are correct
+- Check if Judge.me Awesome plan is needed for webhooks
 
-### Incorrect GraphQL Hints
+### Cron not running
+- Verify GitHub Actions workflow is enabled
+- Check `APP_URL` is correct in GitHub secrets
+- Ensure production app is accessible
+- Check cron endpoint logs
 
-By default the [graphql.vscode-graphql](https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql) extension for will assume that GraphQL queries or mutations are for the [Shopify Admin API](https://shopify.dev/docs/api/admin). This is a sensible default, but it may not be true if:
+---
 
-1. You use another Shopify API such as the storefront API.
-2. You use a third party GraphQL API.
+## 📚 Documentation
 
-If so, please update [.graphqlrc.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/.graphqlrc.ts).
+- [AWS S3 Setup Guide](./AWS_S3_SETUP.md)
+- [Cron Job Setup Guide](./CRON_SETUP.md)
+- [Webhook Guide](./WEBHOOK_GUIDE.md)
 
-### Using Defer & await for streaming responses
+---
 
-By default the CLI uses a cloudflare tunnel. Unfortunately  cloudflare tunnels wait for the Response stream to finish, then sends one chunk.  This will not affect production.
+## 🤝 Support
 
-To test [streaming using await](https://reactrouter.com/api/components/Await#await) during local development we recommend [localhost based development](https://shopify.dev/docs/apps/build/cli-for-apps/networking-options#localhost-based-development).
+- **Email**: support@yourdomain.com
+- **Documentation**: [Link to your docs]
+- **Issues**: [GitHub Issues](https://github.com/yourusername/reviewsocial/issues)
 
-### "nbf" claim timestamp check failed
+---
 
-This is because a JWT token is expired.  If you  are consistently getting this error, it could be that the clock on your machine is not in sync with the server.  To fix this ensure you have enabled "Set time and date automatically" in the "Date and Time" settings on your computer.
+## 📄 License
 
-### Using MongoDB and Prisma
+[Your License Here]
 
-If you choose to use MongoDB with Prisma, there are some gotchas in Prisma's MongoDB support to be aware of. Please see the [Prisma SessionStorage README](https://www.npmjs.com/package/@shopify/shopify-app-session-storage-prisma#mongodb).
+---
 
-## Resources
+## 🎉 Acknowledgments
 
-React Router:
+Built with:
+- [Shopify App Template](https://github.com/Shopify/shopify-app-template-react-router)
+- [Google Gemini API](https://ai.google.dev/)
+- [OpenAI API](https://platform.openai.com/)
+- [Judge.me](https://judge.me/)
+- [Instagram Graph API](https://developers.facebook.com/docs/instagram-api/)
+- [AWS S3](https://aws.amazon.com/s3/)
 
-- [React Router docs](https://reactrouter.com/home)
+---
 
-Shopify:
+**Ready to launch! 🚀**
 
-- [Intro to Shopify apps](https://shopify.dev/docs/apps/getting-started)
-- [Shopify App React Router docs](https://shopify.dev/docs/api/shopify-app-react-router)
-- [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
-- [Shopify App Bridge](https://shopify.dev/docs/api/app-bridge-library).
-- [Polaris Web Components](https://shopify.dev/docs/api/app-home/polaris-web-components).
-- [App extensions](https://shopify.dev/docs/apps/app-extensions/list)
-- [Shopify Functions](https://shopify.dev/docs/api/functions)
-
-Internationalization:
-
-- [Internationalizing your app](https://shopify.dev/docs/apps/best-practices/internationalization/getting-started)
-# reviewsocial_shopify
+For production deployment and Shopify App Store submission help, see the [Deployment](#-deployment) and [Submission](#-shopify-app-store-submission) sections above.

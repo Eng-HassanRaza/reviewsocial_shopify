@@ -36,6 +36,28 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const actionType = formData.get("_action");
   
+  if (actionType === "trigger_auto_post") {
+    // Manually trigger the auto-post cron job
+    const { processAllShops } = await import("../services/auto-post-cron.server");
+    
+    try {
+      const results = await processAllShops();
+      const totalPosted = results.reduce((sum, r) => sum + r.posted, 0);
+      const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
+      
+      return {
+        success: true,
+        message: `Auto-post completed: ${totalPosted} posted, ${totalFailed} failed`,
+        results,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to trigger auto-post",
+      };
+    }
+  }
+  
   if (actionType === "post_review") {
     const { session } = await authenticate.admin(request);
     
@@ -386,9 +408,6 @@ export default function Index() {
                   Disconnect Judge.me
                 </s-button>
               </Form>
-              <s-button href="/app/reviews">
-                Test Fetch Reviews
-              </s-button>
             </div>
           </>
         ) : (
@@ -445,6 +464,92 @@ export default function Index() {
           </>
         )}
       </s-section>
+
+      {isJudgeMeConnected && isInstagramConnected && (
+        <s-section heading="Auto-Post Reviews">
+          <s-paragraph>
+            Automatically posts new 5-star reviews to Instagram every 2 hours (max 10 posts/day).
+          </s-paragraph>
+          
+          <s-banner status="info">
+            <s-paragraph>
+              <strong>Note:</strong> For automatic posting via webhooks, you need Judge.me's Awesome plan.
+              Until then, use the "Check for New Reviews" button below or set up a cron job.
+            </s-paragraph>
+          </s-banner>
+
+          <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+            <s-button href="/app/reviews">
+              View Posted Reviews
+            </s-button>
+            
+            <Form method="post">
+              <input type="hidden" name="_action" value="trigger_auto_post" />
+              <s-button variant="primary" type="submit">
+                Check for New Reviews Now
+              </s-button>
+            </Form>
+
+            <Form method="post">
+              <input type="hidden" name="_action" value="post_review" />
+              <s-button variant="secondary" type="submit">
+                Post Latest Review (Manual)
+              </s-button>
+            </Form>
+          </div>
+        </s-section>
+      )}
+
+      {/* Footer with legal links */}
+      <div style={{ 
+        marginTop: '48px', 
+        paddingTop: '24px', 
+        borderTop: '1px solid #e1e3e5',
+        textAlign: 'center',
+        fontSize: '13px',
+        color: '#6d7175'
+      }}>
+        <div style={{ marginBottom: '12px' }}>
+          <strong>ReviewSocial</strong> - Automatically turn 5-star reviews into Instagram posts
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <a 
+            href={process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy'} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ color: '#005BD3', textDecoration: 'none' }}
+          >
+            Privacy Policy
+          </a>
+          <span>•</span>
+          <a 
+            href={process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service'} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ color: '#005BD3', textDecoration: 'none' }}
+          >
+            Terms of Service
+          </a>
+          <span>•</span>
+          <a 
+            href={process.env.SUPPORT_URL || 'https://yourdomain.com/support'} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ color: '#005BD3', textDecoration: 'none' }}
+          >
+            Support
+          </a>
+        </div>
+        <div style={{ marginTop: '12px', fontSize: '12px' }}>
+          Need help? Contact us at{' '}
+          <a 
+            href={`mailto:${process.env.SUPPORT_EMAIL || 'support@yourdomain.com'}`}
+            style={{ color: '#005BD3', textDecoration: 'none' }}
+          >
+            {process.env.SUPPORT_EMAIL || 'support@yourdomain.com'}
+          </a>
+        </div>
+      </div>
     </s-page>
   );
 }

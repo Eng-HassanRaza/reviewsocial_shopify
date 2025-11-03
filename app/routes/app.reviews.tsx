@@ -1,158 +1,213 @@
-import type { LoaderFunctionArgs } from "react-router";
+import { type LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+
+  // Get posted reviews for this shop (last 30 days)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   
-  console.log(`[Reviews] Fetching reviews for shop: ${session.shop}`);
-  
-  const credential = await prisma.judgeMeCredential.findUnique({
-    where: { shop: session.shop },
+  const postedReviews = await prisma.postedReview.findMany({
+    where: {
+      shop,
+      postedAt: { gte: thirtyDaysAgo },
+    },
+    orderBy: { postedAt: 'desc' },
+    take: 100,
   });
 
-  if (!credential) {
-    console.log(`[Reviews] No Judge.me credential found for ${session.shop}`);
-    return {
-      error: "Judge.me not connected",
-      reviews: [],
-      currentShop: session.shop,
-    };
-  }
+  // Get stats
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
-  console.log(`[Reviews] Found credential for ${session.shop}, fetching from Judge.me API...`);
-
-  try {
-    const apiBase = process.env.JUDGEME_API_BASE || "https://judge.me/api/v1";
-    
-    // Try using Bearer token authentication (OAuth standard)
-    let response = await fetch(`${apiBase}/reviews?shop_domain=${session.shop}`, {
-      headers: {
-        "Authorization": `Bearer ${credential.accessToken}`,
-        "Content-Type": "application/json",
+  const stats = {
+    totalPosted: await prisma.postedReview.count({
+      where: { shop, status: 'success' },
+    }),
+    todayPosted: await prisma.postedReview.count({
+      where: {
+        shop,
+        status: 'success',
+        postedAt: { gte: todayStart },
       },
-    });
+    }),
+    failed: await prisma.postedReview.count({
+      where: {
+        shop,
+        status: 'failed',
+        postedAt: { gte: thirtyDaysAgo },
+      },
+    }),
+  };
 
-    // If Bearer doesn't work, try using api_token query parameter
-    if (!response.ok) {
-      console.log(`[Reviews] Bearer auth failed, trying api_token parameter...`);
-      response = await fetch(
-        `${apiBase}/reviews?shop_domain=${session.shop}&api_token=${credential.accessToken}&per_page=10`
-      );
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Reviews] API request failed for ${session.shop}:`, response.status, errorText);
-      return {
-        error: `Failed to fetch reviews: ${response.status} - ${errorText}`,
-        reviews: [],
-        currentShop: session.shop,
-      };
-    }
-
-    const data = await response.json();
-    const reviewCount = data.reviews?.length || 0;
-    
-    console.log(`[Reviews] Successfully fetched ${reviewCount} reviews for ${session.shop}`);
-    
-    // Log first review's shop info if available for debugging
-    if (data.reviews && data.reviews.length > 0) {
-      const firstReview = data.reviews[0];
-      console.log(`[Reviews] First review shop domain:`, firstReview.shop_domain || 'not specified');
-    }
-    
-    return {
-      error: null,
-      reviews: data.reviews || data,
-      rawResponse: data,
-      currentShop: session.shop,
-    };
-  } catch (error) {
-    console.error(`[Reviews] Error fetching reviews for ${session.shop}:`, error);
-    return {
-      error: error instanceof Error ? error.message : "Unknown error",
-      reviews: [],
-      currentShop: session.shop,
-    };
-  }
+  return { postedReviews, stats, shop };
 }
 
-export default function Reviews() {
-  const { error, reviews, rawResponse, currentShop } = useLoaderData<typeof loader>();
+export default function ReviewsPage() {
+  const { postedReviews, stats } = useLoaderData<typeof loader>();
 
   return (
-    <s-page heading="Test Reviews - Judge.me">
+    <s-page heading="Posted Reviews">
       <s-section>
-        <s-banner status="info">
-          <s-paragraph>
-            <strong>Current Store:</strong> {currentShop}
-          </s-paragraph>
-        </s-banner>
+        <s-paragraph>Reviews automatically posted to Instagram (last 30 days)</s-paragraph>
         
-        {error ? (
-          <s-banner status="critical">
-            <s-paragraph>{error}</s-paragraph>
-          </s-banner>
-        ) : (
-          <>
-            <s-banner status="success">
-              <s-paragraph>
-                Successfully fetched {Array.isArray(reviews) ? reviews.length : 0} reviews for {currentShop}
-              </s-paragraph>
-            </s-banner>
+        {/* Stats */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(3, 1fr)', 
+          gap: '16px',
+          marginTop: '16px',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            padding: '20px',
+            border: '1px solid #e1e3e5',
+            borderRadius: '8px',
+            backgroundColor: '#fff'
+          }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#202223' }}>
+              {stats.totalPosted}
+            </div>
+            <div style={{ fontSize: '14px', color: '#6d7175', marginTop: '8px' }}>
+              Total Posted
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '20px',
+            border: '1px solid #e1e3e5',
+            borderRadius: '8px',
+            backgroundColor: '#fff'
+          }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#202223' }}>
+              {stats.todayPosted}/10
+            </div>
+            <div style={{ fontSize: '14px', color: '#6d7175', marginTop: '8px' }}>
+              Posted Today
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '20px',
+            border: '1px solid #e1e3e5',
+            borderRadius: '8px',
+            backgroundColor: '#fff'
+          }}>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#202223' }}>
+              {stats.failed}
+            </div>
+            <div style={{ fontSize: '14px', color: '#6d7175', marginTop: '8px' }}>
+              Failed (30 days)
+            </div>
+          </div>
+        </div>
 
-            {Array.isArray(reviews) && reviews.length > 0 ? (
-              <s-card>
-                {reviews.map((review: any, index: number) => (
-                  <div key={index} style={{ marginBottom: "20px", paddingBottom: "20px", borderBottom: "1px solid #e0e0e0" }}>
-                    <s-paragraph>
-                      <strong>Reviewer:</strong> {review.reviewer?.name || review.reviewer_name || "Anonymous"}
-                    </s-paragraph>
-                    <s-paragraph>
-                      <strong>Rating:</strong> {review.rating} / 5
-                    </s-paragraph>
-                    {review.title && (
-                      <s-paragraph>
-                        <strong>Title:</strong> {review.title}
-                      </s-paragraph>
-                    )}
-                    <s-paragraph>
-                      <strong>Review:</strong> {review.body || review.content || "No content"}
-                    </s-paragraph>
-                    {review.product_title && (
-                      <s-paragraph>
-                        <strong>Product:</strong> {review.product_title}
-                      </s-paragraph>
-                    )}
-                    {review.created_at && (
-                      <s-paragraph>
-                        <strong>Date:</strong> {new Date(review.created_at).toLocaleDateString()}
-                      </s-paragraph>
-                    )}
-                  </div>
+        {/* Reviews List */}
+        {postedReviews.length > 0 ? (
+          <div style={{ 
+            border: '1px solid #e1e3e5',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            backgroundColor: '#fff'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f6f6f7', borderBottom: '1px solid #e1e3e5' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Reviewer</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Review</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Rating</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Status</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Posted At</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {postedReviews.map((review) => (
+                  <tr key={review.id} style={{ borderBottom: '1px solid #e1e3e5' }}>
+                    <td style={{ padding: '12px', verticalAlign: 'top' }}>
+                      <div style={{ fontWeight: '500' }}>{review.reviewerName || 'Anonymous'}</div>
+                      <div style={{ fontSize: '13px', color: '#6d7175' }}>
+                        {review.productTitle || 'Unknown Product'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px', maxWidth: '300px' }}>
+                      <div style={{ 
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {review.reviewText || 'No text'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {'⭐'.repeat(review.rating)}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {review.status === 'success' ? (
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: '#d4f5d4',
+                          color: '#0f5132',
+                          fontSize: '13px'
+                        }}>
+                          Posted
+                        </span>
+                      ) : (
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: '#ffc4c4',
+                          color: '#b71c1c',
+                          fontSize: '13px'
+                        }}>
+                          Failed
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '13px' }}>
+                      {new Date(review.postedAt).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {review.instagramPostId ? (
+                        <a
+                          href={`https://www.instagram.com/p/${review.instagramPostId}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#005BD3', textDecoration: 'none' }}
+                        >
+                          View on Instagram →
+                        </a>
+                      ) : review.error ? (
+                        <div style={{ fontSize: '12px', color: '#b71c1c' }}>
+                          {review.error}
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
                 ))}
-              </s-card>
-            ) : (
-              <s-paragraph>No reviews found</s-paragraph>
-            )}
-
-            <s-section heading="Raw API Response">
-              <s-card>
-                <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px" }}>
-                  {JSON.stringify(rawResponse, null, 2)}
-                </pre>
-              </s-card>
-            </s-section>
-          </>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <s-banner status="info">
+            <s-paragraph>
+              <strong>No posted reviews yet</strong>
+            </s-paragraph>
+            <s-paragraph>
+              Reviews will appear here once they're automatically posted to Instagram.
+              Make sure both Judge.me and Instagram are connected.
+            </s-paragraph>
+          </s-banner>
         )}
-      </s-section>
-      
-      <s-section>
-        <s-button href="/app">Back to Home</s-button>
+        
+        <div style={{ marginTop: '16px' }}>
+          <s-button href="/app">← Back to Dashboard</s-button>
+        </div>
       </s-section>
     </s-page>
   );
 }
-

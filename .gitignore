@@ -1,6 +1,7 @@
 node_modules/
 .env
 .env.*
+!.env.example
 .DS_Store
 npm-debug.log*
 yarn-error.log*
@@ -12,5 +13,30 @@ build/
 .prisma/
 coverage/
 *.sqlite
+*.sqlite-journal
 *.log
 shopify.app.toml
+
+# Test files
+test-*.ts
+test-*.js
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+
+# Generated images
+generated-*.png
+generated-*.jpg
+output-*.png
+output-*.jpg
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Production
+.vercel
+.railway

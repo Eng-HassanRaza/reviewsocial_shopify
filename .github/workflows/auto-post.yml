@@ -1,0 +1,46 @@
+name: Auto-Post Reviews to Instagram
+
+on:
+  schedule:
+    # Runs every 2 hours at minute 0
+    - cron: '0 */2 * * *'
+  
+  # Allows manual trigger from GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  auto-post:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger Auto-Post Cron
+        run: |
+          echo "Triggering auto-post for all shops..."
+          
+          RESPONSE=$(curl -X POST ${{ secrets.APP_URL }}/api/cron/auto-post \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            -s)
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep HTTP_STATUS | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS/d')
+          
+          echo "Response Status: $HTTP_STATUS"
+          echo "Response Body:"
+          echo "$BODY" | jq '.' || echo "$BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Auto-post failed with status $HTTP_STATUS"
+            exit 1
+          fi
+          
+          echo "✅ Auto-post completed successfully"
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Auto-Post Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+
