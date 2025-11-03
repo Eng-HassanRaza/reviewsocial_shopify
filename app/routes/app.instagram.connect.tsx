@@ -1,4 +1,3 @@
-// app/routes/app.judgeme.connect.tsx
 import type { LoaderFunctionArgs } from "react-router";
 import { useEffect } from "react";
 import { useLoaderData } from "react-router";
@@ -6,25 +5,17 @@ import { authenticate } from "../shopify.server";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { ShopifyGlobal } from "@shopify/app-bridge-types";
 
-/**
- * Loader: Authenticates the shop, then returns the top-level redirect URL.
- */
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
   const appUrl = process.env.APP_URL!;
 
-  // We'll hop to /judgeme/redirect (a public route) to set cookies first-party
-  const topRedirect = `${appUrl}/judgeme/redirect?shop=${encodeURIComponent(shop)}`;
+  const topRedirect = `${appUrl}/instagram/redirect?shop=${encodeURIComponent(shop)}`;
 
-  // ✅ Use native Response.json instead of json()
   return Response.json({ topRedirect });
 }
 
-/**
- * Client: Opens the top-level redirect route outside the Shopify iframe
- */
-export default function JudgeMeConnect() {
+export default function InstagramConnect() {
   const { topRedirect } = useLoaderData() as { topRedirect: string };
   const app = useAppBridge();
 
@@ -55,10 +46,11 @@ export default function JudgeMeConnect() {
   }, [app, topRedirect]);
 
   return (
-    <s-page heading="Connecting to Judge.me">
+    <s-page heading="Connecting to Instagram">
       <s-section>
-        <s-paragraph>Redirecting to Judge.me…</s-paragraph>
+        <s-paragraph>Redirecting to Facebook/Instagram…</s-paragraph>
       </s-section>
     </s-page>
   );
 }
+
