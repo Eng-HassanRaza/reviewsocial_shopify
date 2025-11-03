@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import sharp from 'sharp';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { randomBytes } from 'crypto';
 
 export interface ReviewImageData {
   reviewText: string;
@@ -14,21 +16,24 @@ export async function generateReviewImage(
   reviewData: ReviewImageData
 ): Promise<string | null> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  const imgbbApiKey = process.env.IMGBB_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
+  const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const awsRegion = process.env.AWS_REGION;
+  const awsS3Bucket = process.env.AWS_S3_BUCKET;
   
   if (!geminiApiKey) {
     console.error("GEMINI_API_KEY not configured");
     return null;
   }
   
-  if (!imgbbApiKey) {
-    console.error("IMGBB_API_KEY not configured for image storage");
+  if (!openaiApiKey) {
+    console.error("OPENAI_API_KEY not configured");
     return null;
   }
   
-  if (!openaiApiKey) {
-    console.error("OPENAI_API_KEY not configured");
+  if (!awsAccessKeyId || !awsSecretAccessKey || !awsRegion || !awsS3Bucket) {
+    console.error("AWS S3 credentials not configured. Required: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET");
     return null;
   }
   
@@ -128,9 +133,15 @@ export async function generateReviewImage(
     
     console.log("✓ Image optimized (JPEG, 1080x1080)");
     
-    // Step 4: Upload to ImgBB
-    console.log("Step 4: Uploading optimized image to ImgBB...");
-    const imageUrl = await uploadImageToStorage(optimizedImageBase64, 'image/jpeg');
+    // Step 4: Upload to AWS S3
+    console.log("Step 4: Uploading optimized image to AWS S3...");
+    const imageUrl = await uploadImageToS3(
+      optimizedImageBase64,
+      awsAccessKeyId,
+      awsSecretAccessKey,
+      awsRegion,
+      awsS3Bucket
+    );
     
     return imageUrl;
   } catch (error) {
@@ -261,69 +272,68 @@ Output only the final image generation prompt (not your analysis). The prompt sh
   }
 }
 
-async function uploadImageToStorage(
+async function uploadImageToS3(
   base64Data: string,
-  mimeType: string
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  bucket: string
 ): Promise<string | null> {
   try {
-    const imgbbApiKey = process.env.IMGBB_API_KEY;
-    
-    if (!imgbbApiKey) {
-      console.error("IMGBB_API_KEY not configured");
-      return null;
-    }
-    
-    console.log("Uploading image to ImgBB...");
-    const formData = new URLSearchParams();
-    formData.append("key", imgbbApiKey);
-    formData.append("image", base64Data);
-    formData.append("expiration", "0"); // Never expire (important for Instagram)
-
-    const response = await fetch("https://api.imgbb.com/1/upload", {
-      method: "POST",
-      body: formData,
-      headers: {
-        'User-Agent': 'ReviewSocial/1.0'
-      }
+    // Initialize S3 client
+    const s3Client = new S3Client({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      
-      // Log full response for debugging
-      console.log("ImgBB response:", JSON.stringify(data, null, 2));
-      
-      // ImgBB returns the image URL in data.data.url
-      // We want the direct image URL, not the page URL
-      const imageUrl = data.data?.image?.url || data.data?.url;
-      
-      if (!imageUrl) {
-        console.error("No valid URL in ImgBB response");
-        return null;
-      }
-      
-      // Ensure URL is clean (no trailing dots or spaces)
-      const cleanUrl = imageUrl.trim().replace(/\.+$/, '');
-      
-      console.log("Image uploaded successfully:", cleanUrl);
-      console.log("Image URL length:", cleanUrl.length);
-      
-      // Verify URL format is valid
-      try {
-        new URL(cleanUrl);
-      } catch (e) {
-        console.error("Invalid URL format:", cleanUrl);
-        return null;
-      }
-      
-      return cleanUrl;
-    } else {
-      const errorText = await response.text();
-      console.error("ImgBB upload failed:", errorText);
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomString = randomBytes(8).toString('hex');
+    const fileName = `review-images/${timestamp}-${randomString}.jpg`;
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+    
+    console.log(`Uploading to S3: ${bucket}/${fileName}`);
+    console.log(`Image size: ${Math.round(imageBuffer.length / 1024)} KB`);
+
+    // Upload to S3
+    const uploadCommand = new PutObjectCommand({
+      Bucket: bucket,
+      Key: fileName,
+      Body: imageBuffer,
+      ContentType: 'image/jpeg',
+      CacheControl: 'public, max-age=31536000', // Cache for 1 year
+      // Note: ACL removed - use bucket policy for public access instead
+    });
+
+    await s3Client.send(uploadCommand);
+
+    // Construct public URL
+    // Format: https://<bucket>.s3.<region>.amazonaws.com/<key>
+    const imageUrl = `https://${bucket}.s3.${region}.amazonaws.com/${fileName}`;
+    
+    console.log("✓ Image uploaded to S3 successfully");
+    console.log("Public URL:", imageUrl);
+
+    // Verify URL format
+    try {
+      new URL(imageUrl);
+    } catch (e) {
+      console.error("Invalid S3 URL format:", imageUrl);
       return null;
     }
+
+    return imageUrl;
   } catch (error) {
-    console.error("Error uploading image:", error);
+    console.error("Error uploading image to S3:", error);
+    if (error instanceof Error) {
+      console.error("Error details:", error.message);
+      console.error("Error stack:", error.stack);
+    }
     return null;
   }
 }

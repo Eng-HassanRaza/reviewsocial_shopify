@@ -138,7 +138,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!imageUrl) {
         return { 
           success: false, 
-          error: "Failed to generate review image. Please check: 1) GEMINI_API_KEY is set, 2) IMGBB_API_KEY is set (for image hosting), 3) Server logs for detailed error messages" 
+          error: "Failed to generate review image. Please check: 1) GEMINI_API_KEY is set, 2) AWS S3 credentials are configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET), 3) Server logs for detailed error messages" 
         };
       }
 
