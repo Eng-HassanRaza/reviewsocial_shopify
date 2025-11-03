@@ -189,6 +189,49 @@ export async function loader({ request }: { request: Request }) {
         create: { shop, accessToken },
       });
 
+      // Register webhook for automatic posting
+      console.log(`[Judge.me] Registering webhook for ${shop}...`);
+      try {
+        const webhookUrl = `${process.env.APP_URL}/webhooks/judgeme/review`;
+        
+        // Judge.me uses api_token in URL, not Bearer token
+        const webhookApiUrl = `https://judge.me/api/v1/webhooks?shop_domain=${shop}&api_token=${accessToken}`;
+        
+        const webhookResp = await fetch(webhookApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            webhook: {
+              key: 'review/created',
+              url: webhookUrl
+            }
+          })
+        });
+
+        if (webhookResp.ok) {
+          const webhookData = await webhookResp.json();
+          console.log('[Judge.me] Webhook registration response:', JSON.stringify(webhookData, null, 2));
+          const webhookId = webhookData.webhook?.id;
+          
+          if (webhookId) {
+            await prisma.judgeMeCredential.update({
+              where: { shop },
+              data: { webhookId: String(webhookId) }
+            });
+            console.log(`[Judge.me] ✓ Webhook registered successfully! (ID: ${webhookId})`);
+            console.log(`[Judge.me]   URL: ${webhookUrl}`);
+            console.log(`[Judge.me]   Event: review/created`);
+          }
+        } else {
+          const errorText = await webhookResp.text();
+          console.error(`[Judge.me] Webhook registration failed (${webhookResp.status}):`, errorText);
+        }
+      } catch (webhookError) {
+        console.error('[Judge.me] Webhook registration error:', webhookError);
+      }
+
       // Success: back into Admin embedded app with a success flag
       const q: Record<string, string> = { judgeme_connected: "1" };
       if (host) q.host = host;

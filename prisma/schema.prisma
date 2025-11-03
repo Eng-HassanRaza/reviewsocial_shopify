@@ -34,6 +34,7 @@ model Session {
 model JudgeMeCredential {
   shop        String   @id
   accessToken String
+  webhookId   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -46,4 +47,23 @@ model InstagramCredential {
   facebookPageId     String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model PostedReview {
+  id           String   @id @default(cuid())
+  shop         String
+  reviewId     String
+  productTitle String?
+  reviewerName String?
+  rating       Int
+  reviewText   String?
+  instagramPostId String?
+  imageUrl     String?
+  status       String
+  error        String?
+  postedAt     DateTime @default(now())
+  
+  @@unique([shop, reviewId])
+  @@index([shop, status])
+  @@index([shop, postedAt])
 }

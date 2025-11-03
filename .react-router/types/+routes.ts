@@ -14,10 +14,25 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/webhooks/gdpr/customers_data_request": {
+    params: {};
+  };
+  "/webhooks/gdpr/customers_redact": {
+    params: {};
+  };
   "/webhooks/app/scopes_update": {
     params: {};
   };
+  "/webhooks/gdpr/shop_redact": {
+    params: {};
+  };
   "/webhooks/app/uninstalled": {
+    params: {};
+  };
+  "/webhooks/judgeme/review": {
+    params: {};
+  };
+  "/api/cron/auto-post": {
     params: {};
   };
   "/instagram/callback": {
@@ -66,15 +81,35 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/instagram/callback" | "/instagram/redirect" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
+    page: "/" | "/webhooks/gdpr/customers_data_request" | "/webhooks/gdpr/customers_redact" | "/webhooks/app/scopes_update" | "/webhooks/gdpr/shop_redact" | "/webhooks/app/uninstalled" | "/webhooks/judgeme/review" | "/api/cron/auto-post" | "/instagram/callback" | "/instagram/redirect" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
+  };
+  "routes/webhooks.gdpr.customers_data_request.tsx": {
+    id: "routes/webhooks.gdpr.customers_data_request";
+    page: "/webhooks/gdpr/customers_data_request";
+  };
+  "routes/webhooks.gdpr.customers_redact.tsx": {
+    id: "routes/webhooks.gdpr.customers_redact";
+    page: "/webhooks/gdpr/customers_redact";
   };
   "routes/webhooks.app.scopes_update.tsx": {
     id: "routes/webhooks.app.scopes_update";
     page: "/webhooks/app/scopes_update";
   };
+  "routes/webhooks.gdpr.shop_redact.tsx": {
+    id: "routes/webhooks.gdpr.shop_redact";
+    page: "/webhooks/gdpr/shop_redact";
+  };
   "routes/webhooks.app.uninstalled.tsx": {
     id: "routes/webhooks.app.uninstalled";
     page: "/webhooks/app/uninstalled";
+  };
+  "routes/webhooks.judgeme.review.tsx": {
+    id: "routes/webhooks.judgeme.review";
+    page: "/webhooks/judgeme/review";
+  };
+  "routes/api.cron.auto-post.tsx": {
+    id: "routes/api.cron.auto-post";
+    page: "/api/cron/auto-post";
   };
   "routes/instagram.callback.tsx": {
     id: "routes/instagram.callback";
@@ -140,8 +175,13 @@ type RouteFiles = {
 
 type RouteModules = {
   "root": typeof import("./app/root.tsx");
+  "routes/webhooks.gdpr.customers_data_request": typeof import("./app/routes/webhooks.gdpr.customers_data_request.tsx");
+  "routes/webhooks.gdpr.customers_redact": typeof import("./app/routes/webhooks.gdpr.customers_redact.tsx");
   "routes/webhooks.app.scopes_update": typeof import("./app/routes/webhooks.app.scopes_update.tsx");
+  "routes/webhooks.gdpr.shop_redact": typeof import("./app/routes/webhooks.gdpr.shop_redact.tsx");
   "routes/webhooks.app.uninstalled": typeof import("./app/routes/webhooks.app.uninstalled.tsx");
+  "routes/webhooks.judgeme.review": typeof import("./app/routes/webhooks.judgeme.review.tsx");
+  "routes/api.cron.auto-post": typeof import("./app/routes/api.cron.auto-post.tsx");
   "routes/instagram.callback": typeof import("./app/routes/instagram.callback.tsx");
   "routes/instagram.redirect": typeof import("./app/routes/instagram.redirect.tsx");
   "routes/judgeme.callback": typeof import("./app/routes/judgeme.callback.tsx");
