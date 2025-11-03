@@ -8,7 +8,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { generateReviewImage } from "../services/image-generator.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
+  
   const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
     where: { shop: session.shop },
   });
@@ -16,10 +17,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: { shop: session.shop },
   });
 
+  // Note: We cannot reliably detect if Judge.me is installed because:
+  // 1. No permission to query scriptTags or appInstallations
+  // 2. Judge.me API/metafields persist after uninstall
+  // Solution: Always allow connection attempt, let OAuth validation handle it
+  const isJudgeMeInstalled = true; // Always allow connection attempt
+
   return {
     isJudgeMeConnected: Boolean(judgeMeCredential),
+    isJudgeMeInstalled,
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
+    currentShop: session.shop,
   };
 };
 
@@ -44,6 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
+      console.log(`[Instagram Post] Fetching reviews for shop: ${session.shop}`);
       const apiBase = process.env.JUDGEME_API_BASE || "https://judge.me/api/v1";
       
       let response = await fetch(`${apiBase}/reviews?shop_domain=${session.shop}`, {
@@ -54,20 +64,33 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       if (!response.ok) {
+        console.log(`[Instagram Post] Bearer auth failed, trying api_token...`);
         response = await fetch(
           `${apiBase}/reviews?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}&per_page=10`
         );
       }
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Instagram Post] Failed to fetch reviews for ${session.shop}:`, errorText);
         return { success: false, error: "Failed to fetch reviews from Judge.me" };
       }
 
       const data = await response.json();
       const reviews = data.reviews || data;
+      
+      console.log(`[Instagram Post] Fetched ${reviews?.length || 0} reviews for ${session.shop}`);
 
       if (!Array.isArray(reviews) || reviews.length === 0) {
         return { success: false, error: "No reviews found to post" };
+      }
+      
+      // Log shop domain from first review for debugging
+      if (reviews[0].shop_domain) {
+        console.log(`[Instagram Post] First review shop_domain: ${reviews[0].shop_domain}`);
+        if (reviews[0].shop_domain !== session.shop) {
+          console.warn(`[Instagram Post] WARNING: Review shop domain (${reviews[0].shop_domain}) does not match session shop (${session.shop})`);
+        }
       }
 
       // Find first 5-star review
@@ -76,6 +99,8 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!fiveStarReview) {
         return { success: false, error: "No 5-star reviews found. Only 5-star reviews are posted to Instagram." };
       }
+      
+      console.log(`[Instagram Post] Found 5-star review from: ${fiveStarReview.reviewer?.name || fiveStarReview.reviewer_name || 'Unknown'}`);
 
       const reviewText = fiveStarReview.body || fiveStarReview.content || "";
       const reviewerName = fiveStarReview.reviewer?.name || fiveStarReview.reviewer_name || "A Happy Customer";
@@ -186,7 +211,7 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isInstagramConnected, instagramUsername } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop } = useLoaderData<typeof loader>();
 
   useEffect(() => {
     if (params.get("judgeme_connected") === "1") {
@@ -228,22 +253,53 @@ export default function Index() {
   return (
     <s-page heading="reviewsocial">
       <s-section heading="Judge.me Integration">
-        <s-paragraph>Connect your Judge.me account to fetch reviews.</s-paragraph>
+        <s-paragraph>
+          <strong>Current Store:</strong> {currentShop}
+        </s-paragraph>
+        <s-paragraph>Connect your Judge.me account to fetch reviews for THIS store only.</s-paragraph>
+        
+        {!isJudgeMeConnected && (
+          <s-banner status="info">
+            <s-paragraph>
+              <strong>Before connecting:</strong> Make sure Judge.me is installed on {currentShop}.
+            </s-paragraph>
+            <s-paragraph>
+              If Judge.me is not installed, you can get it from the{' '}
+              <a 
+                href="https://apps.shopify.com/judgeme" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#005BD3', textDecoration: 'underline' }}
+              >
+                Shopify App Store
+              </a>.
+            </s-paragraph>
+          </s-banner>
+        )}
+        
         {isJudgeMeConnected ? (
           <>
-            <Form method="post" action="/app/judgeme/disconnect">
-              <s-button variant="tertiary" type="submit">
-                Disconnect Judge.me
-              </s-button>
-            </Form>
-            <div style={{ marginTop: "10px" }}>
+            <s-banner status="success">
+              <s-paragraph>
+                <strong>✓ Connected</strong> - Reviews will be fetched from {currentShop}
+              </s-paragraph>
+            </s-banner>
+            <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+              <Form method="post" action="/app/judgeme/disconnect">
+                <s-button variant="tertiary" type="submit">
+                  Disconnect Judge.me
+                </s-button>
+              </Form>
               <s-button href="/app/reviews">
                 Test Fetch Reviews
               </s-button>
             </div>
           </>
         ) : (
-          <s-button variant="primary" href="/app/judgeme/connect">
+          <s-button 
+            variant="primary" 
+            href="/app/judgeme/connect"
+          >
             Connect to Judge.me
           </s-button>
         )}

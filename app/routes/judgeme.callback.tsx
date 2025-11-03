@@ -112,17 +112,93 @@ export async function loader({ request }: { request: Request }) {
       json.access_token || json.token || json?.data?.access_token;
     if (!accessToken) throw new Error("No access_token in response");
 
-    await prisma.judgeMeCredential.upsert({
-      where: { shop },
-      update: { accessToken },
-      create: { shop, accessToken },
-    });
+    // Validate that the token belongs to the correct store
+    console.log(`Validating Judge.me token for shop: ${shop}`);
+    
+    try {
+      // Try to fetch reviews to validate the token works for this shop
+      const validateResp = await fetch(
+        `https://judge.me/api/v1/reviews?shop_domain=${shop}&api_token=${accessToken}&per_page=5`
+      );
+      
+      if (!validateResp.ok) {
+        const errorText = await validateResp.text();
+        console.error(`Token validation failed for ${shop}:`, errorText);
+        
+        // Check if it's an authentication error
+        if (validateResp.status === 401 || validateResp.status === 403) {
+          throw new Error(
+            `Judge.me authorization failed. Please ensure Judge.me is installed and configured on your store (${shop}).`
+          );
+        }
+        
+        throw new Error(
+          `Token validation failed: ${validateResp.status}. Judge.me might not be installed on this store.`
+        );
+      }
+      
+      const validateData = await validateResp.json();
+      const reviews = validateData.reviews || [];
+      
+      console.log(`Token validation response for ${shop}:`, {
+        reviewCount: reviews.length,
+        hasReviews: reviews.length > 0,
+      });
+      
+      // CRITICAL: Check if reviews are actually from THIS store
+      if (reviews.length > 0) {
+        const firstReview = reviews[0];
+        const reviewShop = firstReview.shop_domain || firstReview.shop?.domain;
+        
+        console.log(`First review shop_domain:`, reviewShop);
+        console.log(`Expected shop:`, shop);
+        
+        // If the review has a shop_domain field and it doesn't match, reject
+        if (reviewShop && reviewShop !== shop) {
+          console.error(`VALIDATION FAILED: Reviews are from ${reviewShop}, not ${shop}`);
+          throw new Error(
+            `This Judge.me account is connected to ${reviewShop}, not ${shop}. Please install Judge.me on ${shop} first, or disconnect from other stores.`
+          );
+        }
+        
+        // Additional check: look for shop mismatch in any of the reviews
+        const mismatchedReview = reviews.find((r: any) => {
+          const rShop = r.shop_domain || r.shop?.domain;
+          return rShop && rShop !== shop;
+        });
+        
+        if (mismatchedReview) {
+          const wrongShop = mismatchedReview.shop_domain || mismatchedReview.shop?.domain;
+          console.error(`VALIDATION FAILED: Found review from wrong store: ${wrongShop}`);
+          throw new Error(
+            `Judge.me reviews are from ${wrongShop}, not ${shop}. Please install Judge.me on ${shop}.`
+          );
+        }
+        
+        console.log(`✓ Token validated: All reviews are from ${shop}`);
+      } else {
+        // No reviews found - this might be okay if it's a new store
+        console.warn(`No reviews found for ${shop}. This might be a new store or Judge.me isn't installed.`);
+        // We'll allow this but log it
+      }
+      
+      // If we get here, the token is valid for this shop
+      await prisma.judgeMeCredential.upsert({
+        where: { shop },
+        update: { accessToken },
+        create: { shop, accessToken },
+      });
 
-    // Success: back into Admin embedded app with a success flag
-    const q: Record<string, string> = { judgeme_connected: "1" };
-    if (host) q.host = host;
-    if (shop) q.shop = shop;
-    return finish(q);
+      // Success: back into Admin embedded app with a success flag
+      const q: Record<string, string> = { judgeme_connected: "1" };
+      if (host) q.host = host;
+      if (shop) q.shop = shop;
+      return finish(q);
+      
+    } catch (validationError) {
+      console.error("Token validation error:", validationError);
+      throw validationError;
+    }
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "oauth_failed";
