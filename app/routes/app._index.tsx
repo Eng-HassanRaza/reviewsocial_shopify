@@ -222,12 +222,40 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 // Helper function to verify image URL is accessible
-async function verifyImageUrl(imageUrl: string, maxRetries = 3): Promise<boolean> {
+async function verifyImageUrl(imageUrl: string, maxRetries = 5): Promise<boolean> {
+  console.log(`Verifying image URL: ${imageUrl}`);
+  
+  // Check URL format
+  try {
+    const url = new URL(imageUrl);
+    console.log(`URL protocol: ${url.protocol}, host: ${url.host}`);
+  } catch (e) {
+    console.error("Invalid URL format:", imageUrl);
+    return false;
+  }
+  
   for (let i = 0; i < maxRetries; i++) {
     try {
       console.log(`Attempt ${i + 1}/${maxRetries}: Checking if image is accessible...`);
       
-      const response = await fetch(imageUrl, { method: 'HEAD' });
+      // First try HEAD request
+      let response = await fetch(imageUrl, { 
+        method: 'HEAD',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0; +https://reviewsocial.app)',
+        }
+      });
+      
+      // If HEAD fails, try GET
+      if (!response.ok) {
+        console.log(`HEAD request failed (${response.status}), trying GET...`);
+        response = await fetch(imageUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0; +https://reviewsocial.app)',
+          }
+        });
+      }
       
       if (response.ok) {
         const contentType = response.headers.get('content-type');
@@ -235,17 +263,28 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 3): Promise<boolean
         
         console.log(`✓ Image accessible (${contentType}, ${contentLength} bytes)`);
         
-        // Verify it's actually an image
+        // Verify it's actually an image (JPEG, PNG, WebP)
         if (contentType && contentType.startsWith('image/')) {
-          return true;
+          // Additional check: ensure it's a format Instagram accepts
+          const acceptedFormats = ['image/jpeg', 'image/jpg', 'image/png'];
+          if (acceptedFormats.includes(contentType.toLowerCase())) {
+            console.log(`✓ Image format ${contentType} is Instagram-compatible`);
+            return true;
+          } else {
+            console.warn(`Warning: Format ${contentType} might not be Instagram-compatible`);
+            // Still return true, let Instagram decide
+            return true;
+          }
         }
         
         console.warn(`Warning: Content-Type is ${contentType}, not an image`);
+      } else {
+        console.warn(`Response status: ${response.status} ${response.statusText}`);
       }
       
       // If not successful, wait before retry
       if (i < maxRetries - 1) {
-        const waitTime = (i + 1) * 1000; // 1s, 2s, 3s
+        const waitTime = (i + 1) * 2000; // 2s, 4s, 6s, 8s, 10s
         console.log(`Image not ready, waiting ${waitTime}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
@@ -253,7 +292,8 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 3): Promise<boolean
       console.error(`Error verifying image URL (attempt ${i + 1}):`, error);
       
       if (i < maxRetries - 1) {
-        const waitTime = (i + 1) * 1000;
+        const waitTime = (i + 1) * 2000;
+        console.log(`Error occurred, waiting ${waitTime}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }

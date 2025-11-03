@@ -277,17 +277,46 @@ async function uploadImageToStorage(
     const formData = new URLSearchParams();
     formData.append("key", imgbbApiKey);
     formData.append("image", base64Data);
+    formData.append("expiration", "0"); // Never expire (important for Instagram)
 
     const response = await fetch("https://api.imgbb.com/1/upload", {
       method: "POST",
       body: formData,
+      headers: {
+        'User-Agent': 'ReviewSocial/1.0'
+      }
     });
 
     if (response.ok) {
       const data = await response.json();
-      const url = data.data?.url || null;
-      console.log("Image uploaded successfully:", url);
-      return url;
+      
+      // Log full response for debugging
+      console.log("ImgBB response:", JSON.stringify(data, null, 2));
+      
+      // ImgBB returns the image URL in data.data.url
+      // We want the direct image URL, not the page URL
+      const imageUrl = data.data?.image?.url || data.data?.url;
+      
+      if (!imageUrl) {
+        console.error("No valid URL in ImgBB response");
+        return null;
+      }
+      
+      // Ensure URL is clean (no trailing dots or spaces)
+      const cleanUrl = imageUrl.trim().replace(/\.+$/, '');
+      
+      console.log("Image uploaded successfully:", cleanUrl);
+      console.log("Image URL length:", cleanUrl.length);
+      
+      // Verify URL format is valid
+      try {
+        new URL(cleanUrl);
+      } catch (e) {
+        console.error("Invalid URL format:", cleanUrl);
+        return null;
+      }
+      
+      return cleanUrl;
     } else {
       const errorText = await response.text();
       console.error("ImgBB upload failed:", errorText);
