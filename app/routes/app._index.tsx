@@ -459,13 +459,6 @@ export default function Index() {
               </s-paragraph>
             </s-banner>
             <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
-              <Form method="post">
-                <input type="hidden" name="_action" value="view_shop_info" />
-                <s-button variant="primary" type="submit">
-                  View Shop Info
-                </s-button>
-              </Form>
-              
               <Form method="post" action="/app/judgeme/disconnect">
                 <s-button variant="tertiary" type="submit">
                   Disconnect Judge.me
@@ -498,14 +491,6 @@ export default function Index() {
                   Disconnect Instagram
                 </s-button>
               </Form>
-              {isJudgeMeConnected && (
-                <Form method="post">
-                  <input type="hidden" name="_action" value="post_review" />
-                  <s-button variant="primary" type="submit">
-                    Post Latest Review to Instagram
-                  </s-button>
-                </Form>
-              )}
             </div>
           </>
         ) : (
@@ -550,13 +535,6 @@ export default function Index() {
               <input type="hidden" name="_action" value="trigger_auto_post" />
               <s-button variant="primary" type="submit">
                 Check for New Reviews Now
-              </s-button>
-            </Form>
-
-            <Form method="post">
-              <input type="hidden" name="_action" value="post_review" />
-              <s-button variant="secondary" type="submit">
-                Post Latest Review (Manual)
               </s-button>
             </Form>
           </div>
