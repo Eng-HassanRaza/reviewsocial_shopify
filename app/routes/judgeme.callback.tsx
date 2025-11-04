@@ -112,23 +112,30 @@ export async function loader({ request }: { request: Request }) {
       json.access_token || json.token || json?.data?.access_token;
     if (!accessToken) throw new Error("No access_token in response");
 
-    // Validate that the token belongs to the correct store
+    // Validate that the token works for this store
     console.log(`Validating Judge.me token for shop: ${shop}`);
     
     try {
-      // Try to fetch reviews to validate the token works for this shop
+      // Fetch reviews to validate the token and check if reviews exist
       const validateResp = await fetch(
         `https://judge.me/api/v1/reviews?shop_domain=${shop}&api_token=${accessToken}&per_page=5`
       );
       
+      // If API returns non-200, Judge.me is likely not installed
       if (!validateResp.ok) {
         const errorText = await validateResp.text();
-        console.error(`Token validation failed for ${shop}:`, errorText);
+        console.error(`Token validation failed for ${shop} (${validateResp.status}):`, errorText);
         
-        // Check if it's an authentication error
+        // 401/403 usually means not installed or wrong store
         if (validateResp.status === 401 || validateResp.status === 403) {
           throw new Error(
-            `Judge.me authorization failed. Please ensure Judge.me is installed and configured on your store (${shop}).`
+            `Judge.me is not installed on ${shop}. Please install Judge.me from the Shopify App Store first.`
+          );
+        }
+        
+        if (validateResp.status === 404) {
+          throw new Error(
+            `Store not found in Judge.me. Please install Judge.me on ${shop} first.`
           );
         }
         
@@ -145,29 +152,23 @@ export async function loader({ request }: { request: Request }) {
         hasReviews: reviews.length > 0,
       });
       
-      // If API returned 200 OK, Judge.me is installed on this store
-      // Now validate reviews are from the correct shop (if any exist)
-      
-      if (reviews.length === 0) {
-        // Shop has Judge.me installed but no reviews yet - this is OK
-        console.log(`✓ Judge.me is installed on ${shop} (no reviews yet)`);
-      } else {
-        // Reviews exist - validate they're from the correct store
+      // If we got 200 OK with reviews, validate they're from the correct store
+      if (reviews.length > 0) {
         const firstReview = reviews[0];
         const reviewShop = firstReview.shop_domain || firstReview.shop?.domain;
         
         console.log(`First review shop_domain:`, reviewShop);
         console.log(`Expected shop:`, shop);
         
-        // If the review has a shop_domain field and it doesn't match, reject
+        // If the review has a shop_domain and it doesn't match, reject
         if (reviewShop && reviewShop !== shop) {
           console.error(`VALIDATION FAILED: Reviews are from ${reviewShop}, not ${shop}`);
           throw new Error(
-            `This Judge.me account is connected to ${reviewShop}, not ${shop}. Please install Judge.me on ${shop} first, or disconnect from other stores.`
+            `This Judge.me account is connected to ${reviewShop}, not ${shop}. Please install Judge.me on ${shop} first.`
           );
         }
         
-        // Additional check: look for shop mismatch in any of the reviews
+        // Check all reviews to be sure
         const mismatchedReview = reviews.find((r: any) => {
           const rShop = r.shop_domain || r.shop?.domain;
           return rShop && rShop !== shop;
@@ -181,7 +182,11 @@ export async function loader({ request }: { request: Request }) {
           );
         }
         
-        console.log(`✓ Token validated: All reviews are from ${shop}`);
+        console.log(`✓ Token validated: Reviews are from ${shop}`);
+      } else {
+        // 200 OK but no reviews - we can't reliably verify Judge.me is installed
+        // Log warning but allow connection (limitation of Judge.me API)
+        console.warn(`⚠️ No reviews found for ${shop}. Cannot verify Judge.me installation. Allowing connection but may fail if Judge.me is not installed.`);
       }
       
       // If we get here, the token is valid for this shop
