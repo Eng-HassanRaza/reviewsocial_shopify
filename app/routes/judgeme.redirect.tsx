@@ -7,7 +7,7 @@ export const handle = { isPublic: true }; // <- make sure any root auth guard sk
 export async function loader({ request }: LoaderFunctionArgs) {
   const appUrl = process.env.APP_URL!;
   const clientId = process.env.JUDGEME_CLIENT_ID!;
-  const scope = (process.env.JUDGEME_SCOPES || "public").trim();
+  const scope = (process.env.JUDGEME_SCOPES || "read_reviews read_shops").trim();
   const redirectUri = `${appUrl}/judgeme/callback`;
   const authBase = "https://app.judge.me/oauth/authorize";
 

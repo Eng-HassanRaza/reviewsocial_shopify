@@ -42,6 +42,46 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const actionType = formData.get("_action");
   
+  if (actionType === "view_shop_info") {
+    // Fetch Judge.me shop info for debugging
+    const { session } = await authenticate.admin(request);
+    
+    const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
+      where: { shop: session.shop },
+    });
+
+    if (!judgeMeCredential) {
+      return { success: false, error: "Judge.me not connected" };
+    }
+
+    try {
+      const response = await fetch(
+        `https://judge.me/api/v1/shops/info?api_token=${judgeMeCredential.accessToken}`
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          success: false,
+          error: `Failed to fetch shop info: ${response.status} ${errorText}`,
+        };
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        shopInfo: data.shop,
+        message: "Shop info fetched successfully",
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to fetch shop info",
+      };
+    }
+  }
+  
   if (actionType === "trigger_auto_post") {
     // Manually trigger the auto-post cron job
     const { processAllShops } = await import("../services/auto-post-cron.server");
@@ -367,7 +407,17 @@ export default function Index() {
   useEffect(() => {
     if (actionData) {
       if (actionData.success) {
-        shopify.toast.show("Review posted to Instagram successfully!");
+        if (actionData.shopInfo) {
+          // Display shop info in a more readable way
+          const info = actionData.shopInfo;
+          const message = `Judge.me Shop Info:\nID: ${info.id}\nDomain: ${info.domain}\nPlan: ${info.plan}\nPlatform: ${info.platform}\nOwner: ${info.owner}`;
+          console.log("Judge.me Shop Info:", info);
+          shopify.toast.show(message);
+        } else if (actionData.message) {
+          shopify.toast.show(actionData.message);
+        } else {
+          shopify.toast.show("Action completed successfully!");
+        }
       } else if (actionData.error) {
         shopify.toast.show(actionData.error, { isError: true });
       }
@@ -409,6 +459,13 @@ export default function Index() {
               </s-paragraph>
             </s-banner>
             <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+              <Form method="post">
+                <input type="hidden" name="_action" value="view_shop_info" />
+                <s-button variant="primary" type="submit">
+                  View Shop Info
+                </s-button>
+              </Form>
+              
               <Form method="post" action="/app/judgeme/disconnect">
                 <s-button variant="tertiary" type="submit">
                   Disconnect Judge.me
