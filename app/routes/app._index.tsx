@@ -29,6 +29,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
     currentShop: session.shop,
+    legalUrls: {
+      privacyPolicy: process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy',
+      termsOfService: process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service',
+      support: process.env.SUPPORT_URL || 'https://yourdomain.com/support',
+      supportEmail: process.env.SUPPORT_EMAIL || 'support@yourdomain.com',
+    },
   };
 };
 
@@ -329,7 +335,7 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, legalUrls } = useLoaderData<typeof loader>();
 
   useEffect(() => {
     if (params.get("judgeme_connected") === "1") {
@@ -514,7 +520,7 @@ export default function Index() {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <a 
-            href={process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy'} 
+            href={legalUrls.privacyPolicy} 
             target="_blank" 
             rel="noopener noreferrer"
             style={{ color: '#005BD3', textDecoration: 'none' }}
@@ -523,7 +529,7 @@ export default function Index() {
           </a>
           <span>•</span>
           <a 
-            href={process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service'} 
+            href={legalUrls.termsOfService} 
             target="_blank" 
             rel="noopener noreferrer"
             style={{ color: '#005BD3', textDecoration: 'none' }}
@@ -532,7 +538,7 @@ export default function Index() {
           </a>
           <span>•</span>
           <a 
-            href={process.env.SUPPORT_URL || 'https://yourdomain.com/support'} 
+            href={legalUrls.support} 
             target="_blank" 
             rel="noopener noreferrer"
             style={{ color: '#005BD3', textDecoration: 'none' }}
@@ -543,10 +549,10 @@ export default function Index() {
         <div style={{ marginTop: '12px', fontSize: '12px' }}>
           Need help? Contact us at{' '}
           <a 
-            href={`mailto:${process.env.SUPPORT_EMAIL || 'support@yourdomain.com'}`}
+            href={`mailto:${legalUrls.supportEmail}`}
             style={{ color: '#005BD3', textDecoration: 'none' }}
           >
-            {process.env.SUPPORT_EMAIL || 'support@yourdomain.com'}
+            {legalUrls.supportEmail}
           </a>
         </div>
       </div>
