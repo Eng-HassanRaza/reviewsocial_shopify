@@ -70,9 +70,6 @@ type Pages = {
   "/app/judgeme/connect": {
     params: {};
   };
-  "/app/additional": {
-    params: {};
-  };
   "/app/reviews": {
     params: {};
   };
@@ -81,7 +78,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/webhooks/gdpr/customers_data_request" | "/webhooks/gdpr/customers_redact" | "/webhooks/app/scopes_update" | "/webhooks/gdpr/shop_redact" | "/webhooks/app/uninstalled" | "/webhooks/judgeme/review" | "/api/cron/auto-post" | "/instagram/callback" | "/instagram/redirect" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
+    page: "/" | "/webhooks/gdpr/customers_data_request" | "/webhooks/gdpr/customers_redact" | "/webhooks/app/scopes_update" | "/webhooks/gdpr/shop_redact" | "/webhooks/app/uninstalled" | "/webhooks/judgeme/review" | "/api/cron/auto-post" | "/instagram/callback" | "/instagram/redirect" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/reviews";
   };
   "routes/webhooks.gdpr.customers_data_request.tsx": {
     id: "routes/webhooks.gdpr.customers_data_request";
@@ -141,7 +138,7 @@ type RouteFiles = {
   };
   "routes/app.tsx": {
     id: "routes/app";
-    page: "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/additional" | "/app/reviews";
+    page: "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/reviews";
   };
   "routes/app.instagram.disconnect.tsx": {
     id: "routes/app.instagram.disconnect";
@@ -158,10 +155,6 @@ type RouteFiles = {
   "routes/app.judgeme.connect.tsx": {
     id: "routes/app.judgeme.connect";
     page: "/app/judgeme/connect";
-  };
-  "routes/app.additional.tsx": {
-    id: "routes/app.additional";
-    page: "/app/additional";
   };
   "routes/app.reviews.tsx": {
     id: "routes/app.reviews";
@@ -194,7 +187,6 @@ type RouteModules = {
   "routes/app.judgeme.disconnect": typeof import("./app/routes/app.judgeme.disconnect.tsx");
   "routes/app.instagram.connect": typeof import("./app/routes/app.instagram.connect.tsx");
   "routes/app.judgeme.connect": typeof import("./app/routes/app.judgeme.connect.tsx");
-  "routes/app.additional": typeof import("./app/routes/app.additional.tsx");
   "routes/app.reviews": typeof import("./app/routes/app.reviews.tsx");
   "routes/app._index": typeof import("./app/routes/app._index.tsx");
 };

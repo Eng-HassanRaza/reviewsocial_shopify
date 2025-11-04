@@ -213,7 +213,7 @@ If you want automatic posting every 2 hours:
 3. **Test manually:**
    - GitHub → Actions → "Auto-Post Reviews to Instagram" → Run workflow
 
-See [CRON_SETUP.md](./CRON_SETUP.md) for more details.
+See [Railway Deployment Guide](./RAILWAY_DEPLOYMENT.md) for more details.
 
 ---
 

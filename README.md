@@ -149,7 +149,7 @@ Use the "Check for New Reviews Now" button in the app dashboard.
 - Reviews post in real-time when created
 - Free for development stores
 
-See [CRON_SETUP.md](./CRON_SETUP.md) for more options.
+See [Railway Deployment Guide](./RAILWAY_DEPLOYMENT.md) for deployment and cron setup.
 
 ---
 
@@ -289,7 +289,7 @@ Configure GitHub Actions or your hosting provider's cron service to call:
 POST https://your-app.com/api/cron/auto-post
 ```
 
-See [CRON_SETUP.md](./CRON_SETUP.md) for detailed instructions.
+See [Railway Deployment Guide](./RAILWAY_DEPLOYMENT.md) for detailed cron setup instructions.
 
 ---
 
@@ -376,8 +376,8 @@ npm test
 ## 📚 Documentation
 
 - [AWS S3 Setup Guide](./AWS_S3_SETUP.md)
-- [Cron Job Setup Guide](./CRON_SETUP.md)
-- [Webhook Guide](./WEBHOOK_GUIDE.md)
+- [Railway Deployment Guide](./RAILWAY_DEPLOYMENT.md)
+- [Shopify Submission Checklist](./SHOPIFY_SUBMISSION_CHECKLIST.md)
 
 ---
 

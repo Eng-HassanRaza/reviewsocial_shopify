@@ -21,9 +21,9 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>ReviewSocial</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Automatically turn 5-star reviews into beautiful Instagram posts with AI-generated images.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -39,16 +39,13 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Automatic Posting</strong>. Connect Judge.me and Instagram once, then sit back as 5-star reviews automatically become Instagram posts.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>AI-Generated Images</strong>. Beautiful, niche-specific images created with Google Gemini and OpenAI that adapt to your brand and products.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Zero Manual Work</strong>. Auto-posts new reviews every 2 hours with smart duplicate prevention and rate limiting (max 10/day).
           </li>
         </ul>
       </div>

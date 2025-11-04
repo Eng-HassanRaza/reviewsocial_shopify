@@ -145,8 +145,14 @@ export async function loader({ request }: { request: Request }) {
         hasReviews: reviews.length > 0,
       });
       
-      // CRITICAL: Check if reviews are actually from THIS store
-      if (reviews.length > 0) {
+      // If API returned 200 OK, Judge.me is installed on this store
+      // Now validate reviews are from the correct shop (if any exist)
+      
+      if (reviews.length === 0) {
+        // Shop has Judge.me installed but no reviews yet - this is OK
+        console.log(`✓ Judge.me is installed on ${shop} (no reviews yet)`);
+      } else {
+        // Reviews exist - validate they're from the correct store
         const firstReview = reviews[0];
         const reviewShop = firstReview.shop_domain || firstReview.shop?.domain;
         
@@ -176,10 +182,6 @@ export async function loader({ request }: { request: Request }) {
         }
         
         console.log(`✓ Token validated: All reviews are from ${shop}`);
-      } else {
-        // No reviews found - this might be okay if it's a new store
-        console.warn(`No reviews found for ${shop}. This might be a new store or Judge.me isn't installed.`);
-        // We'll allow this but log it
       }
       
       // If we get here, the token is valid for this shop
