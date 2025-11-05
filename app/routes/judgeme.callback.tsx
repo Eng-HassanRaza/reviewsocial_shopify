@@ -112,82 +112,60 @@ export async function loader({ request }: { request: Request }) {
       json.access_token || json.token || json?.data?.access_token;
     if (!accessToken) throw new Error("No access_token in response");
 
-    // Validate that the token works for this store
-    console.log(`Validating Judge.me token for shop: ${shop}`);
+    // Validate that the token works for this store by checking shop registration
+    console.log(`[Judge.me Validation] Validating token for shop: ${shop}`);
     
     try {
-      // Fetch reviews to validate the token and check if reviews exist
+      // Use /shops/info to directly verify this shop is registered in Judge.me
       const validateResp = await fetch(
-        `https://judge.me/api/v1/reviews?shop_domain=${shop}&api_token=${accessToken}&per_page=5`
+        `https://judge.me/api/v1/shops/info?shop_domain=${shop}&api_token=${accessToken}`
       );
       
-      // If API returns non-200, Judge.me is likely not installed
+      // If API returns non-200, Judge.me is not registered for this shop
       if (!validateResp.ok) {
         const errorText = await validateResp.text();
-        console.error(`Token validation failed for ${shop} (${validateResp.status}):`, errorText);
+        const statusCode = validateResp.status;
         
-        // 401/403 usually means not installed or wrong store
-        if (validateResp.status === 401 || validateResp.status === 403) {
-          throw new Error(
-            `Judge.me is not installed on ${shop}. Please install Judge.me from the Shopify App Store first.`
-          );
-        }
+        console.error(`[Judge.me Validation] FAILED for ${shop} (${statusCode}):`, errorText);
         
-        if (validateResp.status === 404) {
+        // 401/403/404 usually means not installed or wrong store
+        if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
           throw new Error(
-            `Store not found in Judge.me. Please install Judge.me on ${shop} first.`
+            `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
           );
         }
         
         throw new Error(
-          `Token validation failed: ${validateResp.status}. Judge.me might not be installed on this store.`
+          `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
         );
       }
       
       const validateData = await validateResp.json();
-      const reviews = validateData.reviews || [];
+      const returnedShop = validateData.shop;
+      const returnedShopDomain = returnedShop?.domain;
       
-      console.log(`Token validation response for ${shop}:`, {
-        reviewCount: reviews.length,
-        hasReviews: reviews.length > 0,
-      });
+      console.log(`[Judge.me Validation] API returned shop domain:`, returnedShopDomain);
+      console.log(`[Judge.me Validation] Expected shop domain:`, shop);
       
-      // If we got 200 OK with reviews, validate they're from the correct store
-      if (reviews.length > 0) {
-        const firstReview = reviews[0];
-        const reviewShop = firstReview.shop_domain || firstReview.shop?.domain;
-        
-        console.log(`First review shop_domain:`, reviewShop);
-        console.log(`Expected shop:`, shop);
-        
-        // If the review has a shop_domain and it doesn't match, reject
-        if (reviewShop && reviewShop !== shop) {
-          console.error(`VALIDATION FAILED: Reviews are from ${reviewShop}, not ${shop}`);
-          throw new Error(
-            `This Judge.me account is connected to ${reviewShop}, not ${shop}. Please install Judge.me on ${shop} first.`
-          );
-        }
-        
-        // Check all reviews to be sure
-        const mismatchedReview = reviews.find((r: any) => {
-          const rShop = r.shop_domain || r.shop?.domain;
-          return rShop && rShop !== shop;
-        });
-        
-        if (mismatchedReview) {
-          const wrongShop = mismatchedReview.shop_domain || mismatchedReview.shop?.domain;
-          console.error(`VALIDATION FAILED: Found review from wrong store: ${wrongShop}`);
-          throw new Error(
-            `Judge.me reviews are from ${wrongShop}, not ${shop}. Please install Judge.me on ${shop}.`
-          );
-        }
-        
-        console.log(`✓ Token validated: Reviews are from ${shop}`);
-      } else {
-        // 200 OK but no reviews - we can't reliably verify Judge.me is installed
-        // Log warning but allow connection (limitation of Judge.me API)
-        console.warn(`⚠️ No reviews found for ${shop}. Cannot verify Judge.me installation. Allowing connection but may fail if Judge.me is not installed.`);
+      // STRICT CHECK: Returned domain MUST exactly match current shop
+      if (!returnedShopDomain) {
+        console.error(`[Judge.me Validation] FAILED: No shop domain in response`);
+        throw new Error(
+          `Invalid response from Judge.me API. Please try again or contact support.`
+        );
       }
+      
+      if (returnedShopDomain !== shop) {
+        console.error(`[Judge.me Validation] FAILED: Domain mismatch - API returned ${returnedShopDomain}, expected ${shop}`);
+        throw new Error(
+          `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
+        );
+      }
+      
+      console.log(`[Judge.me Validation] ✓ SUCCESS: Shop domain matches (${returnedShopDomain} === ${shop})`);
+      console.log(`[Judge.me Validation] ✓ Shop ID: ${returnedShop.id}, Plan: ${returnedShop.plan}`);
+      console.log(`[Judge.me Validation] ✓ ${shop} is properly registered in this Judge.me account`);
+    
       
       // If we get here, the token is valid for this shop
       await prisma.judgeMeCredential.upsert({

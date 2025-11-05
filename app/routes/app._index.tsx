@@ -43,7 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const actionType = formData.get("_action");
   
   if (actionType === "view_shop_info") {
-    // Fetch Judge.me shop info for debugging
+    // Verify if current shop exists in this Judge.me account
     const { session } = await authenticate.admin(request);
     
     const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
@@ -55,29 +55,84 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      const response = await fetch(
-        `https://judge.me/api/v1/shops/info?api_token=${judgeMeCredential.accessToken}`
+      // Check if CURRENT shop exists in this Judge.me account
+      const currentShopResp = await fetch(
+        `https://judge.me/api/v1/shops/info?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}`
       );
-
-      if (!response.ok) {
-        const errorText = await response.text();
+      
+      if (currentShopResp.ok) {
+        const currentShopData = await currentShopResp.json();
+        const shopInfo = currentShopData.shop;
+        const returnedShopDomain = shopInfo?.domain;
+        
+        // STRICT CHECK: Verify the returned domain matches current shop
+        if (!returnedShopDomain) {
+          return {
+            success: false,
+            error: `⚠️ Invalid Response:\n\nJudge.me API did not return shop domain. Please try again.`,
+            isVerified: false
+          };
+        }
+        
+        if (returnedShopDomain !== session.shop) {
+          return {
+            success: false,
+            error: `⚠️ Domain Mismatch:\n\n` +
+              `Current Store: ${session.shop}\n` +
+              `API Returned: ${returnedShopDomain}\n\n` +
+              `Judge.me is registered for ${returnedShopDomain}, not ${session.shop}.\n\n` +
+              `Solution: Install Judge.me on ${session.shop} and reconnect.`,
+            isVerified: false
+          };
+        }
+        
+        // Also fetch reviews count
+        const reviewsResp = await fetch(
+          `https://judge.me/api/v1/reviews?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}&per_page=1`
+        );
+        
+        const reviewsData = reviewsResp.ok ? await reviewsResp.json() : { reviews: [] };
+        const reviewCount = reviewsData.reviews?.length || 0;
+        
+        return {
+          success: true,
+          shopInfo: shopInfo,
+          message: `✓ Judge.me Account Verification:\n\n` +
+            `Current Store: ${session.shop}\n` +
+            `Returned Domain: ${returnedShopDomain}\n` +
+            `Status: VERIFIED ✓ (Domain Match)\n` +
+            `Shop ID: ${shopInfo.id}\n` +
+            `Plan: ${shopInfo.plan}\n` +
+            `Platform: ${shopInfo.platform}\n` +
+            `Reviews Available: ${reviewCount > 0 ? `YES (${reviewCount}+ reviews)` : 'None found'}\n\n` +
+            `✓ This store is properly connected to your Judge.me account.`,
+          isVerified: true,
+          hasReviews: reviewCount > 0
+        };
+      } else {
+        // Current shop NOT found in Judge.me account
+        const statusCode = currentShopResp.status;
+        const errorText = await currentShopResp.text();
+        
+        console.error(`[Judge.me Verification] Shop ${session.shop} not found: ${statusCode} ${errorText}`);
+        
         return {
           success: false,
-          error: `Failed to fetch shop info: ${response.status} ${errorText}`,
+          error: `⚠️ Verification Failed:\n\n` +
+            `Current Store: ${session.shop}\n` +
+            `Status: NOT FOUND in Judge.me account (${statusCode})\n\n` +
+            `This means:\n` +
+            `• Judge.me is not installed on ${session.shop}, OR\n` +
+            `• This Judge.me token belongs to a different store\n\n` +
+            `Solution: Install Judge.me on ${session.shop} first, then reconnect the app.`,
+          isVerified: false
         };
       }
-
-      const data = await response.json();
-      
-      return {
-        success: true,
-        shopInfo: data.shop,
-        message: "Shop info fetched successfully",
-      };
     } catch (error) {
+      console.error('[Judge.me Verification] Error:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch shop info",
+        error: error instanceof Error ? error.message : "Failed to verify shop",
       };
     }
   }
@@ -407,14 +462,18 @@ export default function Index() {
   useEffect(() => {
     if (actionData) {
       if (actionData.success) {
-        if (actionData.shopInfo) {
-          // Display shop info in a more readable way
+        if (actionData.message) {
+          // Display the formatted message from the action
+          shopify.toast.show(actionData.message);
+          if (actionData.shopInfo) {
+            console.log("Judge.me Shop Info:", actionData.shopInfo);
+          }
+        } else if (actionData.shopInfo) {
+          // Fallback: Display shop info in a more readable way
           const info = actionData.shopInfo;
           const message = `Judge.me Shop Info:\nID: ${info.id}\nDomain: ${info.domain}\nPlan: ${info.plan}\nPlatform: ${info.platform}\nOwner: ${info.owner}`;
           console.log("Judge.me Shop Info:", info);
           shopify.toast.show(message);
-        } else if (actionData.message) {
-          shopify.toast.show(actionData.message);
         } else {
           shopify.toast.show("Action completed successfully!");
         }
@@ -458,7 +517,7 @@ export default function Index() {
                 <strong>✓ Connected</strong> - Reviews will be fetched from {currentShop}
               </s-paragraph>
             </s-banner>
-            <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+            <div style={{ marginTop: "10px" }}>
               <Form method="post" action="/app/judgeme/disconnect">
                 <s-button variant="tertiary" type="submit">
                   Disconnect Judge.me
