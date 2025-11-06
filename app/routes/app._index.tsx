@@ -1,11 +1,12 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useEffect } from "react";
-import { Form, useLoaderData, useSearchParams, useActionData } from "react-router";
+import { Form, useLoaderData, useSearchParams, useActionData, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { generateReviewImage } from "../services/image-generator.server";
+import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link } from "@shopify/polaris";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -23,12 +24,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Solution: Always allow connection attempt, let OAuth validation handle it
   const isJudgeMeInstalled = true; // Always allow connection attempt
 
+  // Get stats for dashboard
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  
+  const stats = {
+    totalPosted: await prisma.postedReview.count({
+      where: { shop: session.shop, status: 'success' },
+    }),
+    todayPosted: await prisma.postedReview.count({
+      where: {
+        shop: session.shop,
+        status: 'success',
+        postedAt: { gte: todayStart },
+      },
+    }),
+  };
+
   return {
     isJudgeMeConnected: Boolean(judgeMeCredential),
     isJudgeMeInstalled,
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
     currentShop: session.shop,
+    stats,
     legalUrls: {
       privacyPolicy: process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy',
       termsOfService: process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service',
@@ -138,23 +157,41 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   
   if (actionType === "trigger_auto_post") {
-    // Manually trigger the auto-post cron job
-    const { processAllShops } = await import("../services/auto-post-cron.server");
-    
+    // Manually trigger the auto-post cron job with queue + lock semantics
+    const { processAllShopsQueued, getProcessingState } = await import("../services/auto-post-cron.server");
+
     try {
-      const results = await processAllShops();
-      const totalPosted = results.reduce((sum, r) => sum + r.posted, 0);
-      const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
-      
+      const state = getProcessingState();
+      const res = await processAllShopsQueued();
+
+      if (res.status === 'queued') {
+        return {
+          success: true,
+          message: 'Auto-post already running. Your request was queued.',
+          running: state.isProcessing,
+          queued: true,
+        };
+      }
+
+      if (res.status === 'started') {
+        return {
+          success: true,
+          message: 'Auto-post started.',
+          running: true,
+          queued: false,
+        };
+      }
+
       return {
         success: true,
-        message: `Auto-post completed: ${totalPosted} posted, ${totalFailed} failed`,
-        results,
+        message: 'Auto-post is already running.',
+        running: true,
+        queued: false,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to trigger auto-post",
+        error: error instanceof Error ? error.message : 'Failed to trigger auto-post',
       };
     }
   }
@@ -430,7 +467,10 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, legalUrls } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls } = useLoaderData<typeof loader>();
+  
+  const isFullySetup = isJudgeMeConnected && isInstagramConnected;
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (params.get("judgeme_connected") === "1") {
@@ -484,173 +524,248 @@ export default function Index() {
   }, [actionData, shopify]);
 
   return (
-    <s-page heading="reviewsocial">
-      <s-section heading="Judge.me Integration">
-        <s-paragraph>
-          <strong>Current Store:</strong> {currentShop}
-        </s-paragraph>
-        <s-paragraph>Connect your Judge.me account to fetch reviews for THIS store only.</s-paragraph>
-        
-        {!isJudgeMeConnected && (
-          <s-banner status="info">
-            <s-paragraph>
-              <strong>Before connecting:</strong> Make sure Judge.me is installed on {currentShop}.
-            </s-paragraph>
-            <s-paragraph>
-              If Judge.me is not installed, you can get it from the{' '}
-              <a 
-                href="https://apps.shopify.com/judgeme" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ color: '#005BD3', textDecoration: 'underline' }}
-              >
-                Shopify App Store
-              </a>.
-            </s-paragraph>
-          </s-banner>
+    <Page title="ReviewSocial">
+      <BlockStack gap="500">
+        {/* Welcome Banner for new users */}
+        {!isFullySetup && (
+          <Banner tone="info">
+            <BlockStack gap="200">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                Welcome to ReviewSocial! 🎉
+              </Text>
+              <Text as="p" variant="bodyMd">
+                Automatically turn your 5-star reviews into beautiful Instagram posts with AI-generated images.
+                Follow the setup steps below to get started.
+              </Text>
+            </BlockStack>
+          </Banner>
         )}
-        
-        {isJudgeMeConnected ? (
-          <>
-            <s-banner status="success">
-              <s-paragraph>
-                <strong>✓ Connected</strong> - Reviews will be fetched from {currentShop}
-              </s-paragraph>
-            </s-banner>
-            <div style={{ marginTop: "10px" }}>
-              <Form method="post" action="/app/judgeme/disconnect">
-                <s-button variant="tertiary" type="submit">
-                  Disconnect Judge.me
-                </s-button>
-              </Form>
-            </div>
-          </>
-        ) : (
-          <s-button 
-            variant="primary" 
-            href="/app/judgeme/connect"
-          >
-            Connect to Judge.me
-          </s-button>
-        )}
-      </s-section>
 
-      <s-section heading="Instagram Integration">
-        <s-paragraph>Connect your Instagram business account to auto-post reviews.</s-paragraph>
-        {isInstagramConnected ? (
-          <>
-            <s-banner status="success">
-              <s-paragraph>
-                Connected as @{instagramUsername || "Instagram User"}
-              </s-paragraph>
-            </s-banner>
-            <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
-              <Form method="post" action="/app/instagram/disconnect">
-                <s-button variant="tertiary" type="submit">
-                  Disconnect Instagram
-                </s-button>
-              </Form>
-            </div>
-          </>
-        ) : (
-          <>
-            {!isJudgeMeConnected && (
-              <s-banner status="info">
-                <s-paragraph>
-                  Please connect Judge.me first to enable Instagram posting.
-                </s-paragraph>
-              </s-banner>
-            )}
-            <s-button 
-              variant="primary" 
-              href="/app/instagram/connect"
-              disabled={!isJudgeMeConnected}
-            >
-              Connect to Instagram
-            </s-button>
-          </>
-        )}
-      </s-section>
-
-      {isJudgeMeConnected && isInstagramConnected && (
-        <s-section heading="Auto-Post Reviews">
-          <s-paragraph>
-            Automatically posts new 5-star reviews to Instagram every 2 hours (max 10 posts/day).
-          </s-paragraph>
-          
-          <s-banner status="info">
-            <s-paragraph>
-              <strong>Note:</strong> For automatic posting via webhooks, you need Judge.me's Awesome plan.
-              Until then, use the "Check for New Reviews" button below or set up a cron job.
-            </s-paragraph>
-          </s-banner>
-
-          <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
-            <s-button href="/app/reviews">
-              View Posted Reviews
-            </s-button>
+        {/* Dashboard Stats - only show when fully setup */}
+        {isFullySetup && (
+          <Layout>
+            <Layout.Section variant="oneHalf">
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="p" variant="heading2xl" fontWeight="bold">
+                    {stats.totalPosted}
+                  </Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    Total Reviews Posted
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Layout.Section>
             
-            <Form method="post">
-              <input type="hidden" name="_action" value="trigger_auto_post" />
-              <s-button variant="primary" type="submit">
-                Check for New Reviews Now
-              </s-button>
-            </Form>
-          </div>
-        </s-section>
-      )}
+            <Layout.Section variant="oneHalf">
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="p" variant="heading2xl" fontWeight="bold">
+                    {stats.todayPosted}/10
+                  </Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    Posted Today
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          </Layout>
+        )}
 
-      {/* Footer with legal links */}
-      <div style={{ 
-        marginTop: '48px', 
-        paddingTop: '24px', 
-        borderTop: '1px solid #e1e3e5',
-        textAlign: 'center',
-        fontSize: '13px',
-        color: '#6d7175'
-      }}>
-        <div style={{ marginBottom: '12px' }}>
-          <strong>ReviewSocial</strong> - Automatically turn 5-star reviews into Instagram posts
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <a 
-            href={legalUrls.privacyPolicy} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ color: '#005BD3', textDecoration: 'none' }}
-          >
-            Privacy Policy
-          </a>
-          <span>•</span>
-          <a 
-            href={legalUrls.termsOfService} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ color: '#005BD3', textDecoration: 'none' }}
-          >
-            Terms of Service
-          </a>
-          <span>•</span>
-          <a 
-            href={legalUrls.support} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ color: '#005BD3', textDecoration: 'none' }}
-          >
-            Support
-          </a>
-        </div>
-        <div style={{ marginTop: '12px', fontSize: '12px' }}>
-          Need help? Contact us at{' '}
-          <a 
-            href={`mailto:${legalUrls.supportEmail}`}
-            style={{ color: '#005BD3', textDecoration: 'none' }}
-          >
-            {legalUrls.supportEmail}
-          </a>
-        </div>
-      </div>
-    </s-page>
+        {/* Setup Guide with Progress */}
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <BlockStack gap="200">
+                  <Text as="h2" variant="headingMd">
+                    {isJudgeMeConnected ? '✅' : '1️⃣'} Judge.me Integration
+                  </Text>
+                  {isJudgeMeConnected && (
+                    <Text as="p" variant="bodySm" tone="success">
+                      Step completed
+                    </Text>
+                  )}
+                </BlockStack>
+                <Text as="p" variant="bodyMd">
+                  <Text as="span" fontWeight="semibold">Current Store:</Text> {currentShop}
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  Connect your Judge.me account to fetch reviews for THIS store only.
+                </Text>
+                
+                {!isJudgeMeConnected && (
+                  <Banner tone="info">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodyMd">
+                        <Text as="span" fontWeight="semibold">Before connecting:</Text> Make sure Judge.me is installed on {currentShop}.
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        If Judge.me is not installed, you can get it from the{' '}
+                        <Link url="https://apps.shopify.com/judgeme" target="_blank">
+                          Shopify App Store
+                        </Link>.
+                      </Text>
+                    </BlockStack>
+                  </Banner>
+                )}
+                
+                {isJudgeMeConnected ? (
+                  <BlockStack gap="300">
+                    <Banner tone="success">
+                      <Text as="p" variant="bodyMd">
+                        <Text as="span" fontWeight="semibold">✓ Connected</Text> - Reviews will be fetched from {currentShop}
+                      </Text>
+                    </Banner>
+                    <InlineStack gap="200">
+                      <Form method="post" action="/app/judgeme/disconnect">
+                        <Button variant="plain" submit>
+                          Disconnect Judge.me
+                        </Button>
+                      </Form>
+                    </InlineStack>
+                  </BlockStack>
+                ) : (
+                  <InlineStack gap="200">
+                    <Button variant="primary" url={`/judgeme/connect?shop=${currentShop}`}>
+                      Connect to Judge.me
+                    </Button>
+                  </InlineStack>
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <BlockStack gap="200">
+                  <Text as="h2" variant="headingMd">
+                    {isInstagramConnected ? '✅' : '2️⃣'} Instagram Integration
+                  </Text>
+                  {isInstagramConnected && (
+                    <Text as="p" variant="bodySm" tone="success">
+                      Step completed
+                    </Text>
+                  )}
+                </BlockStack>
+                <Text as="p" variant="bodyMd">
+                  Connect your Instagram business account to auto-post reviews.
+                </Text>
+                
+                {isInstagramConnected ? (
+                  <BlockStack gap="300">
+                    <Banner tone="success">
+                      <Text as="p" variant="bodyMd">
+                        Connected as @{instagramUsername || "Instagram User"}
+                      </Text>
+                    </Banner>
+                    <InlineStack gap="200">
+                      <Form method="post" action="/app/instagram/disconnect">
+                        <Button variant="plain" submit>
+                          Disconnect Instagram
+                        </Button>
+                      </Form>
+                    </InlineStack>
+                  </BlockStack>
+                ) : (
+                  <BlockStack gap="300">
+                    {!isJudgeMeConnected && (
+                      <Banner tone="info">
+                        <Text as="p" variant="bodyMd">
+                          Please connect Judge.me first to enable Instagram posting.
+                        </Text>
+                      </Banner>
+                    )}
+                    <InlineStack gap="200">
+                      <Button 
+                        variant="primary" 
+                        url={`/instagram/connect?shop=${currentShop}`}
+                        disabled={!isJudgeMeConnected}
+                      >
+                        Connect to Instagram
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {isJudgeMeConnected && isInstagramConnected && (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="400">
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingMd">
+                      ✅ Auto-Post Reviews
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="success">
+                      All setup complete! You're ready to go 🚀
+                    </Text>
+                  </BlockStack>
+                  <Text as="p" variant="bodyMd">
+                    Automatically posts new 5-star reviews to Instagram every 2 hours (max 10 posts/day).
+                  </Text>
+                  
+                  <Banner tone="info">
+                    <Text as="p" variant="bodyMd">
+                      <Text as="span" fontWeight="semibold">Note:</Text> For automatic posting via webhooks, you need Judge.me's Awesome plan.
+                      Until then, use the "Check for New Reviews" button below or set up a cron job.
+                    </Text>
+                  </Banner>
+
+                  <InlineStack gap="300">
+                    <Button onClick={() => navigate('/app/reviews')}>
+                      View Posted Reviews
+                    </Button>
+                    
+                    <Form method="post">
+                      <input type="hidden" name="_action" value="trigger_auto_post" />
+                      <Button variant="primary" submit>
+                        Check for New Reviews Now
+                      </Button>
+                    </Form>
+                  </InlineStack>
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          )}
+        </Layout>
+
+        {/* Footer with legal links */}
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="300" inlineAlign="center">
+                <Text as="p" variant="bodyMd" alignment="center">
+                  <Text as="span" fontWeight="semibold">ReviewSocial</Text> - Automatically turn 5-star reviews into Instagram posts
+                </Text>
+                <InlineStack gap="300" wrap={false}>
+                  <Link url={legalUrls.privacyPolicy} target="_blank">
+                    Privacy Policy
+                  </Link>
+                  <Text as="span">•</Text>
+                  <Link url={legalUrls.termsOfService} target="_blank">
+                    Terms of Service
+                  </Link>
+                  <Text as="span">•</Text>
+                  <Link url={legalUrls.support} target="_blank">
+                    Support
+                  </Link>
+                </InlineStack>
+                <Text as="p" variant="bodySm" alignment="center">
+                  Need help? Contact us at{' '}
+                  <Link url={`mailto:${legalUrls.supportEmail}`}>
+                    {legalUrls.supportEmail}
+                  </Link>
+                </Text>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        </Layout>
+      </BlockStack>
+    </Page>
   );
 }
 
