@@ -40,3 +40,4 @@ output-*.jpg
 # Production
 .vercel
 .railway
+*.md

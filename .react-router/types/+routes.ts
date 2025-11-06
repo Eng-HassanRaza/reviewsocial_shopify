@@ -41,10 +41,16 @@ type Pages = {
   "/instagram/redirect": {
     params: {};
   };
+  "/instagram/connect": {
+    params: {};
+  };
   "/judgeme/callback": {
     params: {};
   };
   "/judgeme/redirect": {
+    params: {};
+  };
+  "/judgeme/connect": {
     params: {};
   };
   "/auth/login": {
@@ -64,12 +70,6 @@ type Pages = {
   "/app/judgeme/disconnect": {
     params: {};
   };
-  "/app/instagram/connect": {
-    params: {};
-  };
-  "/app/judgeme/connect": {
-    params: {};
-  };
   "/app/reviews": {
     params: {};
   };
@@ -78,7 +78,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/webhooks/gdpr/customers_data_request" | "/webhooks/gdpr/customers_redact" | "/webhooks/app/scopes_update" | "/webhooks/gdpr/shop_redact" | "/webhooks/app/uninstalled" | "/webhooks/judgeme/review" | "/api/cron/auto-post" | "/instagram/callback" | "/instagram/redirect" | "/judgeme/callback" | "/judgeme/redirect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/reviews";
+    page: "/" | "/webhooks/gdpr/customers_data_request" | "/webhooks/gdpr/customers_redact" | "/webhooks/app/scopes_update" | "/webhooks/gdpr/shop_redact" | "/webhooks/app/uninstalled" | "/webhooks/judgeme/review" | "/api/cron/auto-post" | "/instagram/callback" | "/instagram/redirect" | "/instagram/connect" | "/judgeme/callback" | "/judgeme/redirect" | "/judgeme/connect" | "/auth/login" | "/auth/*" | "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/reviews";
   };
   "routes/webhooks.gdpr.customers_data_request.tsx": {
     id: "routes/webhooks.gdpr.customers_data_request";
@@ -116,6 +116,10 @@ type RouteFiles = {
     id: "routes/instagram.redirect";
     page: "/instagram/redirect";
   };
+  "routes/instagram.connect.tsx": {
+    id: "routes/instagram.connect";
+    page: "/instagram/connect";
+  };
   "routes/judgeme.callback.tsx": {
     id: "routes/judgeme.callback";
     page: "/judgeme/callback";
@@ -123,6 +127,10 @@ type RouteFiles = {
   "routes/judgeme.redirect.tsx": {
     id: "routes/judgeme.redirect";
     page: "/judgeme/redirect";
+  };
+  "routes/judgeme.connect.tsx": {
+    id: "routes/judgeme.connect";
+    page: "/judgeme/connect";
   };
   "routes/auth.login/route.tsx": {
     id: "routes/auth.login";
@@ -138,7 +146,7 @@ type RouteFiles = {
   };
   "routes/app.tsx": {
     id: "routes/app";
-    page: "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/instagram/connect" | "/app/judgeme/connect" | "/app/reviews";
+    page: "/app" | "/app/instagram/disconnect" | "/app/judgeme/disconnect" | "/app/reviews";
   };
   "routes/app.instagram.disconnect.tsx": {
     id: "routes/app.instagram.disconnect";
@@ -147,14 +155,6 @@ type RouteFiles = {
   "routes/app.judgeme.disconnect.tsx": {
     id: "routes/app.judgeme.disconnect";
     page: "/app/judgeme/disconnect";
-  };
-  "routes/app.instagram.connect.tsx": {
-    id: "routes/app.instagram.connect";
-    page: "/app/instagram/connect";
-  };
-  "routes/app.judgeme.connect.tsx": {
-    id: "routes/app.judgeme.connect";
-    page: "/app/judgeme/connect";
   };
   "routes/app.reviews.tsx": {
     id: "routes/app.reviews";
@@ -177,16 +177,16 @@ type RouteModules = {
   "routes/api.cron.auto-post": typeof import("./app/routes/api.cron.auto-post.tsx");
   "routes/instagram.callback": typeof import("./app/routes/instagram.callback.tsx");
   "routes/instagram.redirect": typeof import("./app/routes/instagram.redirect.tsx");
+  "routes/instagram.connect": typeof import("./app/routes/instagram.connect.tsx");
   "routes/judgeme.callback": typeof import("./app/routes/judgeme.callback.tsx");
   "routes/judgeme.redirect": typeof import("./app/routes/judgeme.redirect.tsx");
+  "routes/judgeme.connect": typeof import("./app/routes/judgeme.connect.tsx");
   "routes/auth.login": typeof import("./app/routes/auth.login/route.tsx");
   "routes/_index": typeof import("./app/routes/_index/route.tsx");
   "routes/auth.$": typeof import("./app/routes/auth.$.tsx");
   "routes/app": typeof import("./app/routes/app.tsx");
   "routes/app.instagram.disconnect": typeof import("./app/routes/app.instagram.disconnect.tsx");
   "routes/app.judgeme.disconnect": typeof import("./app/routes/app.judgeme.disconnect.tsx");
-  "routes/app.instagram.connect": typeof import("./app/routes/app.instagram.connect.tsx");
-  "routes/app.judgeme.connect": typeof import("./app/routes/app.judgeme.connect.tsx");
   "routes/app.reviews": typeof import("./app/routes/app.reviews.tsx");
   "routes/app._index": typeof import("./app/routes/app._index.tsx");
 };

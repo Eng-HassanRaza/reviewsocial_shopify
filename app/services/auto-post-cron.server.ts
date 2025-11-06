@@ -27,6 +27,37 @@ interface ProcessResult {
 const MAX_POSTS_PER_DAY = 10;
 const MAX_POSTS_PER_RUN = 5;
 
+// Simple in-memory run control. Suitable for single-instance deployments.
+let isProcessing: boolean = false;
+let pendingRun: boolean = false;
+
+export function getProcessingState() {
+  return { isProcessing, pendingRun };
+}
+
+export async function processAllShopsQueued(): Promise<{ status: 'started' | 'queued' | 'running' }>
+{
+  if (isProcessing) {
+    // Queue a follow-up run and return immediately
+    pendingRun = true;
+    return { status: 'queued' };
+  }
+
+  // Start a processing loop that will drain the queue if set while running
+  isProcessing = true;
+  try {
+    do {
+      pendingRun = false; // clear before run; if new requests come, they'll set it back
+      await processAllShops();
+      // loop continues if pendingRun was set during the run
+    } while (pendingRun);
+  } finally {
+    isProcessing = false;
+  }
+
+  return { status: 'started' };
+}
+
 /**
  * Main cron job function - processes new reviews for all shops
  */
@@ -114,11 +145,41 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
   }
 
   const remainingToday = MAX_POSTS_PER_DAY - todayPostCount;
-  const maxPostsThisRun = Math.min(MAX_POSTS_PER_RUN, remainingToday);
+  let quotaLeftThisRun = Math.min(MAX_POSTS_PER_RUN, remainingToday);
 
-  console.log(`[Cron] ${shop}: Can post up to ${maxPostsThisRun} reviews this run (${todayPostCount}/${MAX_POSTS_PER_DAY} today)`);
+  console.log(`[Cron] ${shop}: Can post up to ${quotaLeftThisRun} reviews this run (${todayPostCount}/${MAX_POSTS_PER_DAY} today)`);
 
-  // Fetch recent reviews from Judge.me (last 48 hours)
+  // 1) First retry previously failed posts (FIFO) up to quota
+  if (quotaLeftThisRun > 0) {
+    const failedToRetry = await prisma.postedReview.findMany({
+      where: { shop, status: 'failed' },
+      orderBy: { postedAt: 'asc' },
+      take: quotaLeftThisRun,
+    });
+
+    for (const rec of failedToRetry) {
+      try {
+        await postStoredReviewToInstagram(shop, rec, instagramCredential);
+        result.posted++;
+        quotaLeftThisRun--;
+        console.log(`[Cron] ${shop}: ✓ Retried review ${rec.reviewId}`);
+      } catch (error) {
+        result.failed++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        result.errors.push(`Retry ${rec.reviewId}: ${errorMessage}`);
+        console.error(`[Cron] ${shop}: ✗ Retry failed for ${rec.reviewId}:`, error);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (quotaLeftThisRun <= 0) break;
+    }
+  }
+
+  if (quotaLeftThisRun <= 0) {
+    return result;
+  }
+
+  // 2) Then fetch recent reviews from Judge.me (last 48 hours)
   const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   
   try {
@@ -160,8 +221,8 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
     // Sort by oldest first (FIFO)
     newReviews.reverse();
 
-    // Post up to maxPostsThisRun
-    const reviewsToPost = newReviews.slice(0, maxPostsThisRun);
+    // Post up to quotaLeftThisRun
+    const reviewsToPost = newReviews.slice(0, quotaLeftThisRun);
     result.skipped = newReviews.length - reviewsToPost.length;
 
     for (const review of reviewsToPost) {
@@ -221,10 +282,19 @@ async function postReviewToInstagram(
   });
 
   if (!imageUrl) {
-    await prisma.postedReview.create({
-      data: {
+    await prisma.postedReview.upsert({
+      where: { shop_reviewId: { shop, reviewId } },
+      create: {
         shop,
         reviewId,
+        productTitle,
+        reviewerName,
+        rating,
+        reviewText: reviewText.substring(0, 500),
+        status: 'failed',
+        error: 'Image generation failed',
+      },
+      update: {
         productTitle,
         reviewerName,
         rating,
@@ -241,10 +311,20 @@ async function postReviewToInstagram(
   // Verify image is accessible
   const isAccessible = await verifyImageUrl(imageUrl);
   if (!isAccessible) {
-    await prisma.postedReview.create({
-      data: {
+    await prisma.postedReview.upsert({
+      where: { shop_reviewId: { shop, reviewId } },
+      create: {
         shop,
         reviewId,
+        productTitle,
+        reviewerName,
+        rating,
+        reviewText: reviewText.substring(0, 500),
+        imageUrl,
+        status: 'failed',
+        error: 'Image not accessible',
+      },
+      update: {
         productTitle,
         reviewerName,
         rating,
@@ -279,10 +359,20 @@ async function postReviewToInstagram(
 
   if (!containerResp.ok) {
     const errorText = await containerResp.text();
-    await prisma.postedReview.create({
-      data: {
+    await prisma.postedReview.upsert({
+      where: { shop_reviewId: { shop, reviewId } },
+      create: {
         shop,
         reviewId,
+        productTitle,
+        reviewerName,
+        rating,
+        reviewText: reviewText.substring(0, 500),
+        imageUrl,
+        status: 'failed',
+        error: `Instagram container failed: ${errorText}`,
+      },
+      update: {
         productTitle,
         reviewerName,
         rating,
@@ -312,10 +402,20 @@ async function postReviewToInstagram(
 
   if (!publishResp.ok) {
     const errorText = await publishResp.text();
-    await prisma.postedReview.create({
-      data: {
+    await prisma.postedReview.upsert({
+      where: { shop_reviewId: { shop, reviewId } },
+      create: {
         shop,
         reviewId,
+        productTitle,
+        reviewerName,
+        rating,
+        reviewText: reviewText.substring(0, 500),
+        imageUrl,
+        status: 'failed',
+        error: `Instagram publish failed: ${errorText}`,
+      },
+      update: {
         productTitle,
         reviewerName,
         rating,
@@ -332,10 +432,20 @@ async function postReviewToInstagram(
   const postId = publishData.id;
 
   // Save success to database
-  await prisma.postedReview.create({
-    data: {
+  await prisma.postedReview.upsert({
+    where: { shop_reviewId: { shop, reviewId } },
+    create: {
       shop,
       reviewId,
+      productTitle,
+      reviewerName,
+      rating,
+      reviewText: reviewText.substring(0, 500),
+      imageUrl,
+      instagramPostId: postId,
+      status: 'success',
+    },
+    update: {
       productTitle,
       reviewerName,
       rating,
@@ -347,6 +457,33 @@ async function postReviewToInstagram(
   });
 
   console.log(`[Cron] ✓ Posted review ${reviewId} to Instagram (Post ID: ${postId})`);
+}
+
+// Retry path using stored PostedReview data
+async function postStoredReviewToInstagram(
+  shop: string,
+  rec: {
+    reviewId: string;
+    reviewText: string | null;
+    reviewerName: string | null;
+    productTitle: string | null;
+    rating: number;
+    imageUrl: string | null;
+  },
+  instagramCredential: { accessToken: string; instagramAccountId: string }
+) {
+  const review: ReviewData = {
+    id: rec.reviewId,
+    rating: rec.rating,
+    body: rec.reviewText ?? undefined,
+    content: rec.reviewText ?? undefined,
+    reviewer: { name: rec.reviewerName ?? undefined },
+    reviewer_name: rec.reviewerName ?? undefined,
+    name: rec.reviewerName ?? undefined,
+    product_title: rec.productTitle ?? undefined,
+    product: { title: rec.productTitle ?? undefined },
+  };
+  await postReviewToInstagram(shop, review, instagramCredential);
 }
 
 /**
