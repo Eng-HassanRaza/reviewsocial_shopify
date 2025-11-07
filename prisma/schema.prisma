@@ -67,3 +67,9 @@ model PostedReview {
   @@index([shop, status])
   @@index([shop, postedAt])
 }
+
+model ShopPlan {
+  shop      String   @id
+  planName  String
+  updatedAt DateTime @updatedAt
+}
