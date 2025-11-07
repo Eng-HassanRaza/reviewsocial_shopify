@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "a42772b2b498eda321955db864b92475"
-name = "ReviewSocial"
+name = "SocialRevu"
 application_url = "https://reviewsocial-production.up.railway.app"
 embedded = true
 
