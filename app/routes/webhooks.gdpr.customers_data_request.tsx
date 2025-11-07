@@ -66,6 +66,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   } catch (error) {
     console.error('[GDPR] Error processing customer data request:', error);
+    if (error instanceof Response) {
+      return error;
+    }
     return new Response(JSON.stringify({ error: 'Internal error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
