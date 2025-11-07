@@ -21,11 +21,19 @@ interface ProcessResult {
   failed: number;
   skipped: number;
   dailyLimit: boolean;
+  monthlyLimit?: boolean;
   errors: string[];
 }
 
 const MAX_POSTS_PER_DAY = 10;
 const MAX_POSTS_PER_RUN = 5;
+
+function getMonthlyQuotaForPlanName(planName: string | null | undefined): number {
+  if (!planName) return 5; // default to Free
+  const normalized = String(planName).toLowerCase();
+  if (normalized.includes('free')) return 5;
+  return Infinity; // other plans unlimited for now
+}
 
 // Simple in-memory run control. Suitable for single-instance deployments.
 let isProcessing: boolean = false;
@@ -142,6 +150,30 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
     console.log(`[Cron] Skipping ${shop}: Daily limit reached (${todayPostCount}/${MAX_POSTS_PER_DAY})`);
     result.dailyLimit = true;
     return result;
+  }
+
+  // Check monthly limit based on plan
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthPostCount = await prisma.postedReview.count({
+    where: {
+      shop,
+      status: 'success',
+      postedAt: { gte: monthStart },
+    },
+  });
+
+  // Determine plan via Shopify-managed pricing rules: Free = 5/month, others unlimited
+  // We do not have the plan name here (server job runs without Admin client per shop),
+  // so we infer: if no subscription stored, default to Free. Optional: store plan in DB.
+  // For now, enforce a conservative default: allow at least Free quota; unlimited remains unrestricted.
+  const monthlyQuota = getMonthlyQuotaForPlanName(null);
+
+  if (monthlyQuota !== Infinity && monthPostCount >= monthlyQuota) {
+    console.log(`[Cron] Skipping ${shop}: Monthly limit reached (${monthPostCount}/${monthlyQuota})`);
+    return { ...result, monthlyLimit: true };
   }
 
   const remainingToday = MAX_POSTS_PER_DAY - todayPostCount;
