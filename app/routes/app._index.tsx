@@ -70,6 +70,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // ignore errors; plan display is optional and should not break the page
   }
 
+  // Compute monthly usage and limit
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthlyUsage = await prisma.postedReview.count({
+    where: {
+      shop: session.shop,
+      status: 'success',
+      postedAt: { gte: monthStart },
+    },
+  });
+
+  const normalizedPlan = (currentAppPlan || 'Free').toLowerCase();
+  const monthlyLimit = normalizedPlan.includes('free') ? 5 : Infinity;
+
   return {
     isJudgeMeConnected: Boolean(judgeMeCredential),
     isJudgeMeInstalled,
@@ -79,6 +95,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     stats,
     managedPricingUrl,
     currentAppPlan,
+    monthlyUsage,
+    monthlyLimit,
     legalUrls: {
       privacyPolicy: process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy',
       termsOfService: process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service',
@@ -498,8 +516,9 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan, monthlyUsage, monthlyLimit } = useLoaderData<typeof loader>();
   const displayedPlan = currentAppPlan || "Free";
+  const isMonthlyCapped = Number.isFinite(monthlyLimit) && monthlyUsage >= (monthlyLimit as number);
   
   const isFullySetup = isJudgeMeConnected && isInstagramConnected;
   const navigate = useNavigate();
@@ -582,6 +601,13 @@ export default function Index() {
               </Text>
               <Text as="p" variant="bodyMd">
                 Current plan: <Text as="span" fontWeight="semibold">{displayedPlan}</Text>
+              </Text>
+              <Text as="p" variant="bodyMd">
+                {Number.isFinite(monthlyLimit) ? (
+                  <>This month: <Text as="span" fontWeight="semibold">{monthlyUsage}</Text> of <Text as="span" fontWeight="semibold">{monthlyLimit as number}</Text> images used</>
+                ) : (
+                  <>This month: <Text as="span" fontWeight="semibold">{monthlyUsage}</Text> images used</>
+                )}
               </Text>
               <InlineStack gap="200">
                 <Button onClick={() => window.open(managedPricingUrl as string, "_top")}>
@@ -773,7 +799,7 @@ export default function Index() {
                     
                     <Form method="post">
                       <input type="hidden" name="_action" value="trigger_auto_post" />
-                      <Button variant="primary" submit>
+                      <Button variant="primary" submit disabled={isMonthlyCapped}>
                         Check for New Reviews Now
                       </Button>
                     </Form>
