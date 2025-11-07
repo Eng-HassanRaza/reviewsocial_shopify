@@ -583,7 +583,7 @@ async function waitForMediaContainerReady(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const statusUrl = new URL(`https://graph.facebook.com/v18.0/${containerId}`);
-    statusUrl.searchParams.set('fields', 'status,status_code,error');
+    statusUrl.searchParams.set('fields', 'status,status_code');
     statusUrl.searchParams.set('access_token', accessToken);
 
     const statusResp = await fetch(statusUrl.toString());
@@ -600,8 +600,8 @@ async function waitForMediaContainerReady(
     }
 
     if (statusCode === 'ERROR') {
-      const reason = statusData?.error?.message || JSON.stringify(statusData?.error || statusData);
-      throw new Error(`Media container error: ${reason}`);
+      const reason = statusData?.status || statusCode || 'unknown';
+      throw new Error(`Media container error (status: ${reason})`);
     }
 
     if (attempt < maxAttempts) {
