@@ -21,7 +21,7 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>ReviewSocial</h1>
+        <h1 className={styles.heading}>SocialRevu</h1>
         <p className={styles.text}>
           Automatically turn 5-star reviews into beautiful Instagram posts with AI-generated images.
         </p>

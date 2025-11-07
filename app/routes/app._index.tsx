@@ -468,7 +468,7 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 5): Promise<boolean
       let response = await fetch(imageUrl, { 
         method: 'HEAD',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0; +https://reviewsocial.app)',
+          'User-Agent': 'Mozilla/5.0 (compatible; SocialRevu/1.0; +https://socialrevu.app)',
         }
       });
       
@@ -477,8 +477,8 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 5): Promise<boolean
         console.log(`HEAD request failed (${response.status}), trying GET...`);
         response = await fetch(imageUrl, {
           method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0; +https://reviewsocial.app)',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; SocialRevu/1.0; +https://socialrevu.app)',
           }
         });
       }
@@ -592,14 +592,14 @@ export default function Index() {
   }, [actionData, shopify]);
 
   return (
-    <Page title="ReviewSocial">
+    <Page title="SocialRevu">
       <BlockStack gap="500">
         {/* Welcome Banner for new users */}
         {!isFullySetup && (
           <Banner tone="info">
             <BlockStack gap="200">
               <Text as="p" variant="bodyMd" fontWeight="semibold">
-                Welcome to ReviewSocial! 🎉
+                Welcome to SocialRevu! 🎉
               </Text>
               <Text as="p" variant="bodyMd">
                 Automatically turn your 5-star reviews into beautiful Instagram posts with AI-generated images.
@@ -833,7 +833,7 @@ export default function Index() {
             <Card>
               <BlockStack gap="300" inlineAlign="center">
                 <Text as="p" variant="bodyMd" alignment="center">
-                  <Text as="span" fontWeight="semibold">ReviewSocial</Text> - Automatically turn 5-star reviews into Instagram posts
+                  <Text as="span" fontWeight="semibold">SocialRevu</Text> - Automatically turn 5-star reviews into Instagram posts
                 </Text>
                 <InlineStack gap="300" wrap={false}>
                   <Link url={legalUrls.privacyPolicy} target="_blank">
