@@ -420,20 +420,10 @@ async function postReviewToInstagram(
   const containerData = await containerResp.json();
   const containerId = containerData.id;
 
-  // Publish media
-  const publishUrl = `https://graph.facebook.com/v18.0/${igAccountId}/media_publish`;
-  const publishParams = new URLSearchParams({
-    creation_id: containerId,
-    access_token: accessToken,
-  });
-
-  const publishResp = await fetch(publishUrl, {
-    method: 'POST',
-    body: publishParams,
-  });
-
-  if (!publishResp.ok) {
-    const errorText = await publishResp.text();
+  try {
+    await waitForMediaContainerReady(containerId, accessToken);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Media container not ready';
     await prisma.postedReview.upsert({
       where: { shop_reviewId: { shop, reviewId } },
       create: {
@@ -445,7 +435,7 @@ async function postReviewToInstagram(
         reviewText: reviewText.substring(0, 500),
         imageUrl,
         status: 'failed',
-        error: `Instagram publish failed: ${errorText}`,
+        error: `Instagram container not ready: ${message}`,
       },
       update: {
         productTitle,
@@ -454,10 +444,76 @@ async function postReviewToInstagram(
         reviewText: reviewText.substring(0, 500),
         imageUrl,
         status: 'failed',
-        error: `Instagram publish failed: ${errorText}`,
+        error: `Instagram container not ready: ${message}`,
       },
     });
-    throw new Error(`Failed to publish media: ${errorText}`);
+    throw new Error(message);
+  }
+
+  // Publish media
+  const publishUrl = `https://graph.facebook.com/v18.0/${igAccountId}/media_publish`;
+  const createPublishParams = () =>
+    new URLSearchParams({
+      creation_id: containerId,
+      access_token: accessToken,
+    });
+
+  let publishResp = await fetch(publishUrl, {
+    method: 'POST',
+    body: createPublishParams(),
+  });
+
+  if (!publishResp.ok) {
+    let errorText = await publishResp.text();
+    let retry = false;
+
+    try {
+      const errorJson = JSON.parse(errorText);
+      const code = errorJson?.error?.code;
+      const subcode = errorJson?.error?.error_subcode;
+      if (code === 9007 && subcode === 2207027) {
+        console.warn(`[Cron] ${shop}: Media not ready for publishing, retrying after wait...`);
+        await sleep(2000);
+        await waitForMediaContainerReady(containerId, accessToken, { maxAttempts: 5, delayMs: 2000 });
+        publishResp = await fetch(publishUrl, {
+          method: 'POST',
+          body: createPublishParams(),
+        });
+        retry = true;
+        if (!publishResp.ok) {
+          errorText = await publishResp.text();
+        }
+      }
+    } catch (parseError) {
+      // Ignore JSON parse issues; fallback to original error text
+    }
+
+    if (!publishResp.ok) {
+      await prisma.postedReview.upsert({
+        where: { shop_reviewId: { shop, reviewId } },
+        create: {
+          shop,
+          reviewId,
+          productTitle,
+          reviewerName,
+          rating,
+          reviewText: reviewText.substring(0, 500),
+          imageUrl,
+          status: 'failed',
+          error: `Instagram publish failed${retry ? ' (after retry)' : ''}: ${errorText}`,
+        },
+        update: {
+          productTitle,
+          reviewerName,
+          rating,
+          reviewText: reviewText.substring(0, 500),
+          imageUrl,
+          status: 'failed',
+          error: `Instagram publish failed${retry ? ' (after retry)' : ''}: ${errorText}`,
+        },
+      });
+      throw new Error(`Failed to publish media: ${errorText}`);
+    }
   }
 
   const publishData = await publishResp.json();
@@ -516,6 +572,48 @@ async function postStoredReviewToInstagram(
     product: { title: rec.productTitle ?? undefined },
   };
   await postReviewToInstagram(shop, review, instagramCredential);
+}
+
+async function waitForMediaContainerReady(
+  containerId: string,
+  accessToken: string,
+  options: { maxAttempts?: number; delayMs?: number } = {}
+): Promise<void> {
+  const { maxAttempts = 10, delayMs = 2000 } = options;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const statusUrl = new URL(`https://graph.facebook.com/v18.0/${containerId}`);
+    statusUrl.searchParams.set('fields', 'status,status_code,error');
+    statusUrl.searchParams.set('access_token', accessToken);
+
+    const statusResp = await fetch(statusUrl.toString());
+    if (!statusResp.ok) {
+      const errorText = await statusResp.text();
+      throw new Error(`Failed to check media status: ${statusResp.status} ${errorText}`);
+    }
+
+    const statusData = await statusResp.json();
+    const statusCode = statusData?.status_code || statusData?.status;
+
+    if (statusCode === 'FINISHED') {
+      return;
+    }
+
+    if (statusCode === 'ERROR') {
+      const reason = statusData?.error?.message || JSON.stringify(statusData?.error || statusData);
+      throw new Error(`Media container error: ${reason}`);
+    }
+
+    if (attempt < maxAttempts) {
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error('Media container not ready after waiting');
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
