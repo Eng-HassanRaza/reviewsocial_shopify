@@ -41,6 +41,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   };
 
+  // Support multiple env names for managed pricing URL
+  const managedPricingUrlTemplate =
+    process.env.MANAGED_PRICING_URL ||
+    process.env.SHOPIFY_MANAGED_PRICING_URL ||
+    process.env.SHOPIFY_PRICING_URL ||
+    process.env.PRICING_URL ||
+    null;
+
+  // Resolve {storeSlug} / {shopDomain} placeholders if provided in env
+  const storeSlug = session.shop.replace(".myshopify.com", "");
+  const managedPricingUrl = managedPricingUrlTemplate
+    ? managedPricingUrlTemplate
+        .replace(/\{storeSlug\}|%7BstoreSlug%7D/gi, storeSlug)
+        .replace(/\{shopDomain\}|%7BshopDomain%7D/gi, session.shop)
+    : null;
+
+  // Try to fetch current app subscription plan via Admin GraphQL
+  let currentAppPlan: string | null = null;
+  try {
+    const response = await admin.graphql(`#graphql\n      query CurrentAppPlan {\n        currentAppInstallation {\n          activeSubscriptions {\n            name\n            status\n          }\n        }\n      }\n    `);
+    const result = await response.json();
+    const subs = result?.data?.currentAppInstallation?.activeSubscriptions || [];
+    if (Array.isArray(subs) && subs.length > 0) {
+      currentAppPlan = subs[0]?.name || null;
+    }
+  } catch (e) {
+    // ignore errors; plan display is optional and should not break the page
+  }
+
   return {
     isJudgeMeConnected: Boolean(judgeMeCredential),
     isJudgeMeInstalled,
@@ -48,6 +77,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     instagramUsername: instagramCredential?.instagramUsername,
     currentShop: session.shop,
     stats,
+    managedPricingUrl,
+    currentAppPlan,
     legalUrls: {
       privacyPolicy: process.env.PRIVACY_POLICY_URL || 'https://yourdomain.com/privacy-policy',
       termsOfService: process.env.TERMS_OF_SERVICE_URL || 'https://yourdomain.com/terms-of-service',
@@ -467,7 +498,8 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan } = useLoaderData<typeof loader>();
+  const displayedPlan = currentAppPlan || "Free";
   
   const isFullySetup = isJudgeMeConnected && isInstagramConnected;
   const navigate = useNavigate();
@@ -539,6 +571,25 @@ export default function Index() {
               </Text>
             </BlockStack>
           </Banner>
+        )}
+
+        {/* Managed Pricing - open Shopify pricing dashboard */}
+        {managedPricingUrl && (
+          <Card>
+            <BlockStack gap="300">
+              <Text as="h2" variant="headingMd">
+                Plan & Billing
+              </Text>
+              <Text as="p" variant="bodyMd">
+                Current plan: <Text as="span" fontWeight="semibold">{displayedPlan}</Text>
+              </Text>
+              <InlineStack gap="200">
+                <Button onClick={() => window.open(managedPricingUrl as string, "_top")}>
+                  View plans
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Card>
         )}
 
         {/* Dashboard Stats - only show when fully setup */}
