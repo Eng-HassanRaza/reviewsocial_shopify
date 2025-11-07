@@ -165,11 +165,8 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
     },
   });
 
-  // Determine plan via Shopify-managed pricing rules: Free = 5/month, others unlimited
-  // We do not have the plan name here (server job runs without Admin client per shop),
-  // so we infer: if no subscription stored, default to Free. Optional: store plan in DB.
-  // For now, enforce a conservative default: allow at least Free quota; unlimited remains unrestricted.
-  const monthlyQuota = getMonthlyQuotaForPlanName(null);
+  const planRecord = await prisma.shopPlan.findUnique({ where: { shop } });
+  const monthlyQuota = getMonthlyQuotaForPlanName(planRecord?.planName ?? null);
 
   if (monthlyQuota !== Infinity && monthPostCount >= monthlyQuota) {
     console.log(`[Cron] Skipping ${shop}: Monthly limit reached (${monthPostCount}/${monthlyQuota})`);

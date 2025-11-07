@@ -70,6 +70,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // ignore errors; plan display is optional and should not break the page
   }
 
+  let planNameForShop: string | null = null;
+  const prismaAny = prisma as any;
+
+  if (currentAppPlan) {
+    planNameForShop = currentAppPlan;
+    await prismaAny.shopPlan.upsert({
+      where: { shop: session.shop },
+      update: { planName: currentAppPlan },
+      create: { shop: session.shop, planName: currentAppPlan },
+    });
+  } else {
+    const storedPlan = await prismaAny.shopPlan.findUnique({
+      where: { shop: session.shop },
+    });
+    planNameForShop = storedPlan?.planName || null;
+  }
+
   // Compute monthly usage and limit
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -83,7 +100,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   });
 
-  const normalizedPlan = (currentAppPlan || 'Free').toLowerCase();
+  const normalizedPlan = (planNameForShop || 'Free').toLowerCase();
   const monthlyLimit = normalizedPlan.includes('free') ? 5 : Infinity;
 
   return {
@@ -94,7 +111,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     currentShop: session.shop,
     stats,
     managedPricingUrl,
-    currentAppPlan,
+    currentAppPlan: planNameForShop,
     monthlyUsage,
     monthlyLimit,
     legalUrls: {
