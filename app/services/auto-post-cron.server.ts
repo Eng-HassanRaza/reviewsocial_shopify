@@ -622,7 +622,7 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 3): Promise<boolean
       const response = await fetch(imageUrl, {
         method: 'HEAD',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0)',
+          'User-Agent': 'Mozilla/5.0 (compatible; SocialRevu/1.0)',
         },
       });
 

@@ -263,7 +263,7 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 5): Promise<boolean
       let response = await fetch(imageUrl, { 
         method: 'HEAD',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0)',
+          'User-Agent': 'Mozilla/5.0 (compatible; SocialRevu/1.0)',
         }
       });
       
@@ -271,7 +271,7 @@ async function verifyImageUrl(imageUrl: string, maxRetries = 5): Promise<boolean
         response = await fetch(imageUrl, {
           method: 'GET',
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ReviewSocial/1.0)',
+            'User-Agent': 'Mozilla/5.0 (compatible; SocialRevu/1.0)',
           }
         });
       }
