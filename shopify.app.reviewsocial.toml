@@ -2,12 +2,11 @@
 
 client_id = "a42772b2b498eda321955db864b92475"
 name = "ReviewSocial"
-application_url = "https://reviewsocialshopify-production.up.railway.app"
+application_url = "https://reviewsocial-production.up.railway.app"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2026-01"
@@ -22,11 +21,11 @@ api_version = "2026-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "read_discounts"
 
 [auth]
 redirect_urls = [
-  "https://reviewsocialshopify-production.up.railway.app/auth/callback",
-  "https://reviewsocialshopify-production.up.railway.app/auth/login",
-  "https://reviewsocialshopify-production.up.railway.app/api/auth"
+  "https://reviewsocial-production.up.railway.app/auth/callback",
+  "https://reviewsocial-production.up.railway.app/auth/login",
+  "https://reviewsocial-production.up.railway.app/api/auth"
 ]
