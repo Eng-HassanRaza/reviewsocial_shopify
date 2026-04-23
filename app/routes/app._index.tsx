@@ -649,16 +649,20 @@ export default function Index() {
   useEffect(() => {
     if (judgeMeFetcher.state === 'idle' && judgeMeFetcher.data?.success) {
       shopify.toast.show("Disconnected from Judge.me");
-      navigate('/app');
+      const qs = new URLSearchParams({ shop: currentShop });
+      if (host) qs.set('host', host);
+      navigate(`/app?${qs.toString()}`);
     }
-  }, [judgeMeFetcher.state, judgeMeFetcher.data, navigate, shopify]);
+  }, [judgeMeFetcher.state, judgeMeFetcher.data, navigate, shopify, currentShop, host]);
 
   useEffect(() => {
     if (instagramFetcher.state === 'idle' && instagramFetcher.data?.success) {
       shopify.toast.show("Disconnected from Instagram");
-      navigate('/app');
+      const qs = new URLSearchParams({ shop: currentShop });
+      if (host) qs.set('host', host);
+      navigate(`/app?${qs.toString()}`);
     }
-  }, [instagramFetcher.state, instagramFetcher.data, navigate, shopify]);
+  }, [instagramFetcher.state, instagramFetcher.data, navigate, shopify, currentShop, host]);
 
   return (
     <Page title="SocialRevu">
