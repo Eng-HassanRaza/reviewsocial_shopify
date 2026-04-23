@@ -16,6 +16,24 @@ function clearCookieHeader(name: string) {
   ];
 }
 
+/* --- helper: redirect back to /app with a cookie signalling not-installed ---
+   URL params get dropped by Shopify's auth redirect chain, so we use a cookie instead. */
+function finishNotInstalled({ host, shop }: { host: string | null; shop: string | null }) {
+  const headers = new Headers();
+  clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
+  clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
+  clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
+  // 5-minute cookie — survives the redirect chain, cleared by the /app loader after reading
+  headers.append(
+    "Set-Cookie",
+    "jm_not_installed=1; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300"
+  );
+  const qs = new URLSearchParams();
+  if (shop) qs.set("shop", shop);
+  if (host) qs.set("host", host);
+  return redirect(`/app?${qs.toString()}`, { headers });
+}
+
 /* --- loader: validate state, exchange code, then redirect into Admin Apps URL --- */
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
@@ -115,11 +133,7 @@ export async function loader({ request }: { request: Request }) {
         const errorText = await validateResp.text();
         const statusCode = validateResp.status;
         console.error(`[Judge.me Validation] FAILED for ${shop} (${statusCode}):`, errorText);
-        // Signal "not installed" distinctly so the dashboard can show targeted help
-        const q: Record<string, string> = { judgeme_not_installed: '1' };
-        if (host) q.host = host;
-        if (shop) q.shop = shop;
-        return finish(q);
+        return finishNotInstalled({ host, shop });
       }
       
       const validateData = await validateResp.json();
@@ -139,10 +153,7 @@ export async function loader({ request }: { request: Request }) {
       
       if (returnedShopDomain !== shop) {
         console.error(`[Judge.me Validation] FAILED: Domain mismatch - API returned ${returnedShopDomain}, expected ${shop}`);
-        const q: Record<string, string> = { judgeme_not_installed: '1' };
-        if (host) q.host = host;
-        if (shop) q.shop = shop;
-        return finish(q);
+        return finishNotInstalled({ host, shop });
       }
       
       console.log(`[Judge.me Validation] ✓ SUCCESS: Shop domain matches (${returnedShopDomain} === ${shop})`);

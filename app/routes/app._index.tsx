@@ -10,8 +10,9 @@ import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
-  const requestUrl = new URL(request.url);
-  const judgeMeNotInstalled = requestUrl.searchParams.get("judgeme_not_installed") === "1";
+  // Read the not-installed cookie set by the callback (URL params don't survive Shopify's redirect chain)
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const judgeMeNotInstalled = /(?:^|;\s*)jm_not_installed=1(?:;|$)/.test(cookieHeader);
   
   const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
     where: { shop: session.shop },
@@ -124,7 +125,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const normalizedPlan = (planNameForShop || 'Free').toLowerCase();
   const monthlyLimit = normalizedPlan.includes('free') ? 5 : Infinity;
 
-  return {
+  const data = {
     isJudgeMeConnected,
     isJudgeMeInstalled,
     judgeMeNotInstalled,
@@ -143,6 +144,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       supportEmail: process.env.SUPPORT_EMAIL || 'support@yourdomain.com',
     },
   };
+
+  // Clear the not-installed cookie after reading it so it only shows once
+  if (judgeMeNotInstalled) {
+    return Response.json(data, {
+      headers: {
+        "Set-Cookie": "jm_not_installed=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+      },
+    });
+  }
+  return data;
 };
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -566,6 +577,7 @@ export default function Index() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
+  const [notInstalledDismissed, setNotInstalledDismissed] = useState(false);
   const judgeMeFetcher = useFetcher();
   const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
@@ -580,7 +592,7 @@ export default function Index() {
       "judgeme_connected",
       "judgeme_disconnected",
       "judgeme_error",
-      // judgeme_not_installed is NOT here — it stays in URL until user dismisses the banner
+      // judgeme_not_installed is handled via cookie, not URL param
       "instagram_connected",
       "instagram_disconnected",
       "instagram_error",
@@ -785,15 +797,11 @@ export default function Index() {
                   Connect your Judge.me account to fetch reviews for THIS store only.
                 </Text>
                 
-                {judgeMeNotInstalled && (
+                {judgeMeNotInstalled && !notInstalledDismissed && (
                   <Banner
                     title="Judge.me is not installed on this store"
                     tone="critical"
-                    onDismiss={() => {
-                      const cleaned = new URLSearchParams(params);
-                      cleaned.delete("judgeme_not_installed");
-                      navigate({ search: cleaned.toString() ? `?${cleaned.toString()}` : "" }, { replace: true });
-                    }}
+                    onDismiss={() => setNotInstalledDismissed(true)}
                   >
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd">
@@ -806,7 +814,7 @@ export default function Index() {
                     </BlockStack>
                   </Banner>
                 )}
-                {!isJudgeMeConnected && !judgeMeNotInstalled && (
+                {!isJudgeMeConnected && (!judgeMeNotInstalled || notInstalledDismissed) && (
                   <Banner tone="info">
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd">
