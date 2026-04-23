@@ -410,3 +410,13 @@ Built with:
 **Ready to launch! 🚀**
 
 For production deployment and Shopify App Store submission help, see the [Deployment](#-deployment) and [Submission](#-shopify-app-store-submission) sections above.
+
+npm run test:image -- \
+  --shop "fermwellness.com" \
+  --review 'Lovely minty taste and I felt a benefit straight away. I struggle digesting and absorbing nutrients, particularly fats so I tried it before a rich breakfast that included nuts and coconut yoghurt, and felt a lightness after which was a new feeling! So now it’s part of my morning ritual. A well considered product and definitely worth trying!' \
+  --reviewer "Dan" \
+  --product "GUT+ Digest
+A MULTI-ACTION, 5-IN-ONE DAILY GUT SUPPORT FORMULA - THOUGHTFULLY DESIGNED FOR CONSISTENT, EVERDAY USE
+" \
+  --rating 5 \
+  --tagline "supplement formulated to support digestive health"

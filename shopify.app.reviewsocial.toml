@@ -32,7 +32,9 @@ api_version = "2026-01"
   uri = "/webhooks/gdpr/shop_redact"
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+# This app does not read merchant data from Shopify (products, orders, customers).
+# It uses only currentAppInstallation (billing/subscription query) which requires no scopes.
+# All review and Instagram data is fetched from Judge.me and Meta APIs directly.
 scopes = ""
 
 [auth]

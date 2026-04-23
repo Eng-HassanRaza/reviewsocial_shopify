@@ -13,21 +13,22 @@ export const handle = { isPublic: true };
 export async function action({ request }: ActionFunctionArgs) {
   console.log('[Cron API] Received auto-post request');
 
-  // Optional: Verify cron secret for security
-  const authHeader = request.headers.get('Authorization');
   const cronSecret = process.env.CRON_SECRET;
-  
-  if (cronSecret) {
-    const expectedAuth = `Bearer ${cronSecret}`;
-    if (authHeader !== expectedAuth) {
-      console.error('[Cron API] Unauthorized: Invalid or missing Authorization header');
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-  } else {
-    console.warn('[Cron API] WARNING: CRON_SECRET not set. Anyone can trigger this endpoint!');
+  if (!cronSecret) {
+    console.error('[Cron API] CRON_SECRET env var is not set. Refusing to process.');
+    return new Response(JSON.stringify({ error: 'Server misconfiguration: CRON_SECRET is required' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    console.error('[Cron API] Unauthorized: Invalid or missing Authorization header');
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {

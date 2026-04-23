@@ -1,12 +1,12 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useEffect } from "react";
-import { Form, useLoaderData, useSearchParams, useActionData, useNavigate } from "react-router";
+import { useEffect, useState, useRef } from "react";
+import { Form, useLoaderData, useSearchParams, useActionData, useNavigate, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { generateReviewImage } from "../services/image-generator.server";
-import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link } from "@shopify/polaris";
+import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link, Modal, Tooltip, Spinner } from "@shopify/polaris";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
@@ -539,6 +539,14 @@ export default function Index() {
   
   const isFullySetup = isJudgeMeConnected && isInstagramConnected;
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const [showJudgeMeModal, setShowJudgeMeModal] = useState(false);
+  const [showInstagramModal, setShowInstagramModal] = useState(false);
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const judgeMeFormRef = useRef<HTMLFormElement>(null);
+  const instagramFormRef = useRef<HTMLFormElement>(null);
+  const isSubmitting = navigation.state === 'submitting';
+  const submittingAction = navigation.formData?.get('_action') as string | null;
 
   useEffect(() => {
     if (params.get("judgeme_connected") === "1") {
@@ -570,23 +578,19 @@ export default function Index() {
   useEffect(() => {
     if (actionData) {
       if (actionData.success) {
+        setErrorBanner(null);
         if (actionData.message) {
-          // Display the formatted message from the action
           shopify.toast.show(actionData.message);
-          if (actionData.shopInfo) {
-            console.log("Judge.me Shop Info:", actionData.shopInfo);
-          }
-        } else if (actionData.shopInfo) {
-          // Fallback: Display shop info in a more readable way
-          const info = actionData.shopInfo;
-          const message = `Judge.me Shop Info:\nID: ${info.id}\nDomain: ${info.domain}\nPlan: ${info.plan}\nPlatform: ${info.platform}\nOwner: ${info.owner}`;
-          console.log("Judge.me Shop Info:", info);
-          shopify.toast.show(message);
         } else {
           shopify.toast.show("Action completed successfully!");
         }
       } else if (actionData.error) {
-        shopify.toast.show(actionData.error, { isError: true });
+        const msg = actionData.error as string;
+        if (msg.includes('\n')) {
+          setErrorBanner(msg);
+        } else {
+          shopify.toast.show(msg, { isError: true });
+        }
       }
     }
   }, [actionData, shopify]);
@@ -594,6 +598,17 @@ export default function Index() {
   return (
     <Page title="SocialRevu">
       <BlockStack gap="500">
+        {/* Persistent error banner for complex errors */}
+        {errorBanner && (
+          <Banner tone="critical" onDismiss={() => setErrorBanner(null)}>
+            <BlockStack gap="100">
+              {errorBanner.split('\n').filter(Boolean).map((line, i) => (
+                <Text key={i} as="p" variant="bodyMd">{line}</Text>
+              ))}
+            </BlockStack>
+          </Banner>
+        )}
+
         {/* Welcome Banner for new users */}
         {!isFullySetup && (
           <Banner tone="info">
@@ -712,12 +727,13 @@ export default function Index() {
                       </Text>
                     </Banner>
                     <InlineStack gap="200">
-                      <Form method="post" action="/app/judgeme/disconnect">
-                        <Button variant="plain" submit>
-                          Disconnect Judge.me
-                        </Button>
-                      </Form>
+                      <Button variant="plain" onClick={() => setShowJudgeMeModal(true)}>
+                        Disconnect Judge.me
+                      </Button>
                     </InlineStack>
+                    <Form method="post" action="/app/judgeme/disconnect" ref={judgeMeFormRef} style={{ display: 'none' }}>
+                      <input type="hidden" name="_action" value="disconnect" />
+                    </Form>
                   </BlockStack>
                 ) : (
                   <InlineStack gap="200">
@@ -755,12 +771,13 @@ export default function Index() {
                       </Text>
                     </Banner>
                     <InlineStack gap="200">
-                      <Form method="post" action="/app/instagram/disconnect">
-                        <Button variant="plain" submit>
-                          Disconnect Instagram
-                        </Button>
-                      </Form>
+                      <Button variant="plain" onClick={() => setShowInstagramModal(true)}>
+                        Disconnect Instagram
+                      </Button>
                     </InlineStack>
+                    <Form method="post" action="/app/instagram/disconnect" ref={instagramFormRef} style={{ display: 'none' }}>
+                      <input type="hidden" name="_action" value="disconnect" />
+                    </Form>
                   </BlockStack>
                 ) : (
                   <BlockStack gap="300">
@@ -772,13 +789,15 @@ export default function Index() {
                       </Banner>
                     )}
                     <InlineStack gap="200">
-                      <Button 
-                        variant="primary" 
-                        url={`/instagram/connect?shop=${currentShop}`}
-                        disabled={!isJudgeMeConnected}
-                      >
-                        Connect to Instagram
-                      </Button>
+                      <Tooltip content="Connect Judge.me first to enable Instagram" active={!isJudgeMeConnected}>
+                        <Button
+                          variant="primary"
+                          url={`/instagram/connect?shop=${currentShop}`}
+                          disabled={!isJudgeMeConnected}
+                        >
+                          Connect to Instagram
+                        </Button>
+                      </Tooltip>
                     </InlineStack>
                   </BlockStack>
                 )}
@@ -809,18 +828,31 @@ export default function Index() {
                     </Text>
                   </Banner>
 
-                  <InlineStack gap="300">
-                    <Button onClick={() => navigate('/app/reviews')}>
-                      View Posted Reviews
-                    </Button>
-                    
-                    <Form method="post">
-                      <input type="hidden" name="_action" value="trigger_auto_post" />
-                      <Button variant="primary" submit disabled={isMonthlyCapped}>
-                        Check for New Reviews Now
+                  <BlockStack gap="200">
+                    <InlineStack gap="300">
+                      <Button onClick={() => navigate('/app/reviews')}>
+                        View Posted Reviews
                       </Button>
-                    </Form>
-                  </InlineStack>
+
+                      <Form method="post">
+                        <input type="hidden" name="_action" value="trigger_auto_post" />
+                        <Button
+                          variant="primary"
+                          submit
+                          disabled={isMonthlyCapped || isSubmitting}
+                          loading={isSubmitting && submittingAction === 'trigger_auto_post'}
+                        >
+                          Check for New Reviews Now
+                        </Button>
+                      </Form>
+                    </InlineStack>
+
+                    {isMonthlyCapped && (
+                      <Text as="p" tone="subdued" variant="bodySm">
+                        Monthly limit reached. Upgrade your plan to post more reviews.
+                      </Text>
+                    )}
+                  </BlockStack>
                 </BlockStack>
               </Card>
             </Layout.Section>
@@ -859,6 +891,49 @@ export default function Index() {
           </Layout.Section>
         </Layout>
       </BlockStack>
+
+      {/* Disconnect confirmation modals */}
+      <Modal
+        open={showJudgeMeModal}
+        onClose={() => setShowJudgeMeModal(false)}
+        title="Disconnect Judge.me?"
+        primaryAction={{
+          content: 'Disconnect',
+          destructive: true,
+          onAction: () => {
+            setShowJudgeMeModal(false);
+            judgeMeFormRef.current?.submit();
+          },
+        }}
+        secondaryActions={[{ content: 'Cancel', onAction: () => setShowJudgeMeModal(false) }]}
+      >
+        <Modal.Section>
+          <Text as="p" variant="bodyMd">
+            This will remove your Judge.me connection. Reviews will stop being fetched and posted to Instagram.
+          </Text>
+        </Modal.Section>
+      </Modal>
+
+      <Modal
+        open={showInstagramModal}
+        onClose={() => setShowInstagramModal(false)}
+        title="Disconnect Instagram?"
+        primaryAction={{
+          content: 'Disconnect',
+          destructive: true,
+          onAction: () => {
+            setShowInstagramModal(false);
+            instagramFormRef.current?.submit();
+          },
+        }}
+        secondaryActions={[{ content: 'Cancel', onAction: () => setShowInstagramModal(false) }]}
+      >
+        <Modal.Section>
+          <Text as="p" variant="bodyMd">
+            This will remove your Instagram connection. New reviews will no longer be posted to your Instagram account.
+          </Text>
+        </Modal.Section>
+      </Modal>
     </Page>
   );
 }

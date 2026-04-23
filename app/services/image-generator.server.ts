@@ -63,10 +63,7 @@ export async function generateReviewImage(
         },
       ],
       generationConfig: {
-        responseModalities: ['IMAGE'],
-        imageConfig: {
-          aspectRatio: '1:1',
-        },
+        responseModalities: ['text', 'image'],
       },
     };
     
@@ -201,9 +198,9 @@ async function generateDynamicPrompt(
     const brandName = reviewData.brandName || "Our Store";
     const tagline = reviewData.tagline || (reviewData.rating === 5 ? "Trusted by Happy Customers" : "Quality You Can Trust");
     
-    const metaPrompt = `You are an expert at creating image generation prompts for social media marketing.
+    const metaPrompt = `You are an expert UI/UX designer and visual marketing specialist creating premium social media review post designs.
 
-Your task: Analyze the product and brand information below, then create a detailed, optimized prompt for an AI image generator (Gemini) to create a stunning Instagram/Facebook review post image.
+Your task: Analyze the product and brand information below, then create a highly detailed, sophisticated prompt for an AI image generator (Gemini) to create a stunning, professional Instagram/Facebook review post image with excellent UI/UX design principles.
 
 PRODUCT/BRAND INFORMATION:
 - Brand Name: ${brandName}
@@ -214,28 +211,66 @@ PRODUCT/BRAND INFORMATION:
 - Tagline: ${tagline}
 
 YOUR TASK:
-1. Identify the product category/niche (e.g., fashion, electronics, baby products, pet supplies, food, sports, beauty, home decor, etc.)
-2. Create a design theme that matches the product category (colors, style, visual elements)
-3. Generate a complete image generation prompt that includes:
-   - The EXACT review text (copy it character-by-character without changes)
-   - Brand name and tagline
-   - Stars (${stars})
-   - Reviewer name
-   - Category-appropriate design style, colors, and visual elements
-   - Product-related imagery or icons
-   - Layout specifications (1080x1080px Instagram square format)
-   - Optimization for fast loading and web delivery
+1. **Analyze the brand and product:**
+   - Identify the product category/niche (fashion, electronics, food, beauty, home decor, pet supplies, etc.)
+   - Determine brand personality (premium, playful, minimalist, rustic, modern, etc.)
+   - Infer appropriate color palette based on category and brand name
+   - Consider target audience and lifestyle context
+
+2. **Apply modern UI/UX design principles:**
+   - **Visual Hierarchy**: Use size, color, and positioning to guide the eye
+   - **Typography**: Choose fonts that match brand personality (elegant serif for premium, modern sans-serif for tech, playful fonts for fun brands)
+   - **Color Psychology**: Use colors that evoke the right emotions for the product category
+   - **Spacing & Layout**: Apply proper padding, margins, and white space (rule of thirds, golden ratio)
+   - **Depth & Dimension**: Add subtle shadows, gradients, or layered elements for depth
+   - **Modern Design Trends**: Incorporate contemporary elements like soft gradients, glassmorphism, card-based layouts, or subtle patterns
+
+3. **Create a sophisticated, themed design:**
+   - Design should reflect the STORE'S brand identity and the PRODUCT'S category
+   - Include contextual background elements that relate to the product (e.g., kitchen setting for food, nature for organic products, tech workspace for electronics)
+   - Use product-related imagery, icons, or lifestyle elements that enhance the story
+   - Create visual interest with textures, patterns, or subtle decorative elements
+   - Ensure the design feels premium and professional, not generic
+
+4. **Generate a complete, detailed image generation prompt that includes:**
+   - The EXACT review text (copy character-by-character without changes)
+   - Brand name prominently displayed with appropriate styling
+   - Tagline integrated naturally into the design
+   - Stars (${stars}) displayed beautifully, not just plain text
+   - Reviewer name with appropriate styling (e.g., "— John Doe" or "Reviewed by Sarah")
+   - Product name/title if relevant
+   - Detailed layout description (card layout, split sections, centered content, etc.)
+   - Specific color palette with hex codes or color descriptions
+   - Typography specifications (font styles, sizes, weights)
+   - Background design (gradient, texture, pattern, contextual scene, etc.)
+   - Visual elements (icons, illustrations, product imagery, decorative elements)
+   - Lighting and mood (warm, cool, bright, soft, etc.)
+   - Overall aesthetic (modern, vintage, minimalist, luxurious, playful, etc.)
+   - Layout specifications: 1080x1080px Instagram square format
 
 CRITICAL REQUIREMENTS:
 - The review text MUST be copied EXACTLY as provided: "${reviewData.reviewText}"
 - Do NOT change, summarize, or paraphrase any part of the review text
 - Include multiple reminders in the prompt about text accuracy
-- Make the design theme specific to the detected product category
-- Use appropriate colors, visual elements, and style for the niche
-- Request the image to be optimized for web/social media (reasonable file size, fast loading)
-- Specify clean, simple designs that compress well
+- Create a SOPHISTICATED, PROFESSIONAL design - NOT simple or basic
+- The design should feel like it was created by a professional graphic designer
+- Make the design theme SPECIFIC to both the store brand AND product category
+- Use advanced UI/UX principles: visual hierarchy, proper spacing, modern typography, depth
+- Include contextual elements that tell a story about the product
+- Request rich, detailed visuals with proper composition and professional aesthetics
+- The final image should look like premium social media content that brands would pay for
 
-Output only the final image generation prompt (not your analysis). The prompt should be ready to send directly to an image generation AI.`;
+DESIGN QUALITY STANDARDS:
+- Professional, polished appearance
+- Cohesive color scheme that matches brand/product
+- Proper visual hierarchy (most important info stands out)
+- Modern, contemporary design aesthetic
+- Rich visual details without being cluttered
+- Contextual elements that enhance the product story
+- Typography that matches brand personality
+- Layout that guides the eye naturally
+
+Output only the final, highly detailed image generation prompt (not your analysis). The prompt should be comprehensive and ready to send directly to an AI image generator. Make it detailed enough to produce a professional, sophisticated design.`;
 
     console.log("Calling GPT-4o-mini for prompt generation...");
     
@@ -244,15 +279,15 @@ Output only the final image generation prompt (not your analysis). The prompt sh
       messages: [
         {
           role: "system",
-          content: "You are an expert at creating highly effective, detailed prompts for AI image generators. You specialize in e-commerce and social media marketing visuals."
+          content: "You are a senior UI/UX designer and visual marketing expert specializing in creating premium social media content. You have deep expertise in modern design principles, typography, color theory, visual hierarchy, and brand identity. Your prompts produce sophisticated, professional designs that look like they were created by top-tier design agencies."
         },
         {
           role: "user",
           content: metaPrompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      temperature: 0.8,
+      max_tokens: 1500,
     });
 
     const generatedPrompt = completion.choices[0]?.message?.content;

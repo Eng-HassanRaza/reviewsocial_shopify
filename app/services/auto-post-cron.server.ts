@@ -181,7 +181,7 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
   // 1) First retry previously failed posts (FIFO) up to quota
   if (quotaLeftThisRun > 0) {
     const failedToRetry = await prisma.postedReview.findMany({
-      where: { shop, status: 'failed' },
+      where: { shop, status: 'failed', retryCount: { lt: 3 } },
       orderBy: { postedAt: 'asc' },
       take: quotaLeftThisRun,
     });
@@ -197,6 +197,10 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         result.errors.push(`Retry ${rec.reviewId}: ${errorMessage}`);
         console.error(`[Cron] ${shop}: ✗ Retry failed for ${rec.reviewId}:`, error);
+        await prisma.postedReview.update({
+          where: { id: rec.id },
+          data: { retryCount: { increment: 1 } },
+        });
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -287,7 +291,8 @@ async function postReviewToInstagram(
   instagramCredential: { accessToken: string; instagramAccountId: string }
 ): Promise<void> {
   const reviewId = String(review.id);
-  const reviewText = review.body || review.content || '';
+  const rawReviewText = review.body || review.content || '';
+  const reviewText = rawReviewText.substring(0, 300);
   const reviewerName = review.reviewer?.name || review.reviewer_name || review.name || 'A Happy Customer';
   const productTitle = review.product_title || review.product?.title || 'Our Product';
   const rating = review.rating;
@@ -368,7 +373,8 @@ async function postReviewToInstagram(
 
   // Post to Instagram
   const stars = '⭐'.repeat(rating);
-  const caption = `${stars}\n\n"${reviewText}"\n\n- ${reviewerName}\n\n#customerreview #review #testimonial`;
+  const rawCaption = `${stars}\n\n"${reviewText}"\n\n- ${reviewerName}\n\n#customerreview #review #testimonial`;
+  const caption = rawCaption.substring(0, 2200);
 
   const igAccountId = instagramCredential.instagramAccountId;
   const accessToken = instagramCredential.accessToken;
@@ -545,7 +551,7 @@ async function postReviewToInstagram(
 }
 
 // Retry path using stored PostedReview data
-async function postStoredReviewToInstagram(
+export async function postStoredReviewToInstagram(
   shop: string,
   rec: {
     reviewId: string;

@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useEffect } from "react";
 import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
+import { Page, Layout, Card, BlockStack, Spinner, Text } from "@shopify/polaris";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const appUrl = process.env.APP_URL!;
@@ -31,9 +32,19 @@ export default function JudgeMeTopConnect() {
   }, [topRedirect]);
 
   return (
-    <div style={{ padding: 16 }}>
-      <p>Redirecting to Judge.me for authorization...</p>
-    </div>
+    <Page>
+      <Layout>
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400" inlineAlign="center">
+              <Spinner size="large" />
+              <Text variant="headingSm" as="p">Connecting your Judge.me account…</Text>
+              <Text tone="subdued" as="p">You'll be redirected to Judge.me to complete authorization. Don't close this window.</Text>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </Page>
   );
 }
 
