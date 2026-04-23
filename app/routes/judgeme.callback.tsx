@@ -114,19 +114,12 @@ export async function loader({ request }: { request: Request }) {
       if (!validateResp.ok) {
         const errorText = await validateResp.text();
         const statusCode = validateResp.status;
-        
         console.error(`[Judge.me Validation] FAILED for ${shop} (${statusCode}):`, errorText);
-        
-        // 401/403/404 usually means not installed or wrong store
-        if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
-          throw new Error(
-            `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
-          );
-        }
-        
-        throw new Error(
-          `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
-        );
+        // Signal "not installed" distinctly so the dashboard can show targeted help
+        const q: Record<string, string> = { judgeme_not_installed: '1' };
+        if (host) q.host = host;
+        if (shop) q.shop = shop;
+        return finish(q);
       }
       
       const validateData = await validateResp.json();
@@ -146,9 +139,10 @@ export async function loader({ request }: { request: Request }) {
       
       if (returnedShopDomain !== shop) {
         console.error(`[Judge.me Validation] FAILED: Domain mismatch - API returned ${returnedShopDomain}, expected ${shop}`);
-        throw new Error(
-          `This store is not connected with Judge.me. Please install Judge.me on the store and try again.`
-        );
+        const q: Record<string, string> = { judgeme_not_installed: '1' };
+        if (host) q.host = host;
+        if (shop) q.shop = shop;
+        return finish(q);
       }
       
       console.log(`[Judge.me Validation] ✓ SUCCESS: Shop domain matches (${returnedShopDomain} === ${shop})`);

@@ -563,6 +563,7 @@ export default function Index() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
+  const [isJudgeMeNotInstalled, setIsJudgeMeNotInstalled] = useState(false);
   const judgeMeFetcher = useFetcher();
   const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
@@ -577,14 +578,21 @@ export default function Index() {
       "judgeme_connected",
       "judgeme_disconnected",
       "judgeme_error",
+      "judgeme_not_installed",
       "instagram_connected",
       "instagram_disconnected",
       "instagram_error",
     ];
     let didShowToast = false;
 
+    if (params.get("judgeme_not_installed") === "1") {
+      setIsJudgeMeNotInstalled(true);
+      setIsJudgeMeConnecting(false);
+      didShowToast = true;
+    }
     if (params.get("judgeme_connected") === "1") {
       shopify.toast.show("Connected to Judge.me");
+      setIsJudgeMeNotInstalled(false);
       didShowToast = true;
       setIsJudgeMeConnecting(false);
     }
@@ -649,6 +657,7 @@ export default function Index() {
   useEffect(() => {
     if (judgeMeFetcher.state === 'idle' && judgeMeFetcher.data?.success) {
       shopify.toast.show("Disconnected from Judge.me");
+      setIsJudgeMeNotInstalled(false);
       const qs = new URLSearchParams({ shop: currentShop });
       if (host) qs.set('host', host);
       navigate(`/app?${qs.toString()}`);
@@ -772,7 +781,23 @@ export default function Index() {
                   Connect your Judge.me account to fetch reviews for THIS store only.
                 </Text>
                 
-                {!isJudgeMeConnected && (
+                {isJudgeMeNotInstalled && (
+                  <Banner tone="critical" onDismiss={() => setIsJudgeMeNotInstalled(false)}>
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        Judge.me is not installed on {currentShop}
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        The connection failed because Judge.me is not active on this store.
+                        Please install Judge.me first, then come back and click Connect.
+                      </Text>
+                      <Link url="https://apps.shopify.com/judgeme" target="_blank">
+                        Install Judge.me from the Shopify App Store →
+                      </Link>
+                    </BlockStack>
+                  </Banner>
+                )}
+                {!isJudgeMeConnected && !isJudgeMeNotInstalled && (
                   <Banner tone="info">
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd">
