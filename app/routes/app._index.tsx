@@ -266,7 +266,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (res.status === 'queued') {
         return {
           success: true,
-          message: 'Auto-post already running. Your request was queued.',
+          message: 'Already posting reviews — your request is queued and will run next.',
           running: state.isProcessing,
           queued: true,
         };
@@ -275,7 +275,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (res.status === 'started') {
         return {
           success: true,
-          message: 'Auto-post started.',
+          message: 'Fetching new reviews and posting to Instagram…',
           running: true,
           queued: false,
         };
@@ -283,7 +283,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return {
         success: true,
-        message: 'Auto-post is already running.',
+        message: 'Already posting reviews to Instagram.',
         running: true,
         queued: false,
       };
@@ -941,15 +941,9 @@ export default function Index() {
                     </Text>
                   </BlockStack>
                   <Text as="p" variant="bodyMd">
-                    Automatically posts new 5-star reviews to Instagram every 2 hours (max 10 posts/day).
+                    New 5-star reviews are automatically fetched and posted to Instagram every 2 hours.
+                    You can also trigger an immediate check using the button below.
                   </Text>
-                  
-                  <Banner tone="info">
-                    <Text as="p" variant="bodyMd">
-                      <Text as="span" fontWeight="semibold">Note:</Text> For automatic posting via webhooks, you need Judge.me's Awesome plan.
-                      Until then, use the "Check for New Reviews" button below or set up a cron job.
-                    </Text>
-                  </Banner>
 
                   <BlockStack gap="200">
                     <InlineStack gap="300">
@@ -965,7 +959,7 @@ export default function Index() {
                           disabled={isMonthlyCapped || isSubmitting}
                           loading={isSubmitting && submittingAction === 'trigger_auto_post'}
                         >
-                          Check for New Reviews Now
+                          Post New Reviews Now
                         </Button>
                       </Form>
                     </InlineStack>
