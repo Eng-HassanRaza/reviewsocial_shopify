@@ -1,5 +1,7 @@
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate, useNavigation, useSearchParams, Form } from "react-router";
+import { useLoaderData, useNavigate, useNavigation, useSearchParams, useFetcher, useRevalidator } from "react-router";
+import { useState, useEffect } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { postStoredReviewToInstagram } from "../services/auto-post-cron.server";
@@ -80,6 +82,24 @@ export default function ReviewsPage() {
   const isLoading = navigation.state === 'loading';
   const [params] = useSearchParams();
   const host = params.get('host');
+  const shopify = useAppBridge();
+  const retryFetcher = useFetcher<typeof action>();
+  const revalidator = useRevalidator();
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (retryFetcher.state === 'idle' && retryingId !== null) {
+      const data = retryFetcher.data as { success: boolean; error?: string } | undefined;
+      if (!data) return;
+      if (data.success) {
+        shopify.toast.show('Review posted to Instagram successfully!');
+        revalidator.revalidate();
+      } else {
+        shopify.toast.show(data.error ?? 'Retry failed', { isError: true });
+      }
+      setRetryingId(null);
+    }
+  }, [retryFetcher.state, retryFetcher.data, retryingId, shopify, revalidator]);
 
   function toDashboard() {
     const qs = new URLSearchParams({ shop });
@@ -87,64 +107,84 @@ export default function ReviewsPage() {
     navigate(`/app?${qs.toString()}`);
   }
 
-  const rowMarkup = postedReviews.map((review, index) => (
-    <IndexTable.Row id={review.id} key={review.id} position={index}>
-      <IndexTable.Cell>
-        <BlockStack gap="100">
-          <Text as="span" variant="bodyMd" fontWeight="semibold">
-            {review.reviewerName || 'Anonymous'}
-          </Text>
-          <Text as="span" variant="bodySm" tone="subdued">
-            {review.productTitle || 'Unknown Product'}
-          </Text>
-        </BlockStack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd" truncate>
-          {review.reviewText || 'No text'}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodyMd">
-          {'⭐'.repeat(review.rating)}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Badge tone={review.status === 'success' ? 'success' : 'critical'}>
-          {review.status === 'success' ? 'Posted' : 'Failed'}
-        </Badge>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Text as="span" variant="bodySm">
-          {new Date(review.postedAt).toLocaleString()}
-        </Text>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        {review.instagramPostId ? (
-          <PolarisLink url={`https://www.instagram.com/p/${review.instagramPostId}/`} target="_blank">
-            View on Instagram
-          </PolarisLink>
-        ) : review.status === 'failed' ? (
+  const rowMarkup = postedReviews.map((review, index) => {
+    const isRetrying = retryFetcher.state !== 'idle' && retryingId === review.reviewId;
+
+    // instagramPostId may be a full permalink URL (new) or a legacy numeric/shortcode ID
+    const igUrl = review.instagramPostId
+      ? review.instagramPostId.startsWith('http')
+        ? review.instagramPostId
+        : `https://www.instagram.com/p/${review.instagramPostId}/`
+      : null;
+
+    return (
+      <IndexTable.Row id={review.id} key={review.id} position={index}>
+        <IndexTable.Cell>
           <BlockStack gap="100">
-            {review.error && (
-              <Text as="span" variant="bodySm" tone="critical">
-                {review.error.length > 80 ? review.error.substring(0, 80) + '…' : review.error}
-              </Text>
-            )}
-            <Form method="post">
-              <input type="hidden" name="reviewId" value={review.reviewId} />
-              <Button variant="plain" submit size="slim">
-                Retry
-              </Button>
-            </Form>
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {review.reviewerName || 'Anonymous'}
+            </Text>
+            <Text as="span" variant="bodySm" tone="subdued">
+              {review.productTitle || 'Unknown Product'}
+            </Text>
           </BlockStack>
-        ) : null}
-      </IndexTable.Cell>
-    </IndexTable.Row>
-  ));
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd" truncate>
+            {review.reviewText || 'No text'}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodyMd">
+            {'⭐'.repeat(review.rating)}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Badge tone={review.status === 'success' ? 'success' : 'critical'}>
+            {review.status === 'success' ? 'Posted' : 'Failed'}
+          </Badge>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" variant="bodySm">
+            {new Date(review.postedAt).toLocaleString()}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>
+          {igUrl ? (
+            <PolarisLink url={igUrl} target="_blank">
+              View on Instagram
+            </PolarisLink>
+          ) : review.status === 'failed' ? (
+            <BlockStack gap="100">
+              {review.error && (
+                <Text as="span" variant="bodySm" tone="critical">
+                  {review.error.length > 80 ? review.error.substring(0, 80) + '…' : review.error}
+                </Text>
+              )}
+              <Button
+                variant="plain"
+                size="slim"
+                loading={isRetrying}
+                disabled={retryFetcher.state !== 'idle'}
+                onClick={() => {
+                  setRetryingId(review.reviewId);
+                  retryFetcher.submit(
+                    { reviewId: review.reviewId },
+                    { method: 'post' }
+                  );
+                }}
+              >
+                {isRetrying ? 'Posting…' : 'Retry'}
+              </Button>
+            </BlockStack>
+          ) : null}
+        </IndexTable.Cell>
+      </IndexTable.Row>
+    );
+  });
 
   return (
-    <Page title="Posted Reviews" backAction={{ onAction: () => navigate('/app') }}>
+    <Page title="Posted Reviews" backAction={{ onAction: toDashboard }}>
       <BlockStack gap="500">
         <Text as="p" variant="bodyMd">
           Reviews automatically posted to Instagram (last 30 days)

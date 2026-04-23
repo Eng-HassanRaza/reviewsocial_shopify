@@ -522,6 +522,20 @@ async function postReviewToInstagram(
   const publishData = await publishResp.json();
   const postId = publishData.id;
 
+  // Fetch the public permalink — the numeric postId cannot be used in instagram.com/p/{id}/ URLs
+  let instagramPostId = postId;
+  try {
+    const permalinkResp = await fetch(
+      `https://graph.facebook.com/v18.0/${postId}?fields=permalink&access_token=${accessToken}`
+    );
+    if (permalinkResp.ok) {
+      const permalinkData = await permalinkResp.json();
+      if (permalinkData.permalink) instagramPostId = permalinkData.permalink;
+    }
+  } catch {
+    // If permalink fetch fails, fall back to numeric ID (link will be stored but may 404)
+  }
+
   // Save success to database
   await prisma.postedReview.upsert({
     where: { shop_reviewId: { shop, reviewId } },
@@ -533,7 +547,7 @@ async function postReviewToInstagram(
       rating,
       reviewText: reviewText.substring(0, 500),
       imageUrl,
-      instagramPostId: postId,
+      instagramPostId,
       status: 'success',
     },
     update: {
@@ -542,7 +556,7 @@ async function postReviewToInstagram(
       rating,
       reviewText: reviewText.substring(0, 500),
       imageUrl,
-      instagramPostId: postId,
+      instagramPostId,
       status: 'success',
     },
   });
