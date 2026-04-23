@@ -10,6 +10,8 @@ import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
+  const requestUrl = new URL(request.url);
+  const judgeMeNotInstalled = requestUrl.searchParams.get("judgeme_not_installed") === "1";
   
   const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
     where: { shop: session.shop },
@@ -125,6 +127,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     isJudgeMeConnected,
     isJudgeMeInstalled,
+    judgeMeNotInstalled,
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
     currentShop: session.shop,
@@ -552,7 +555,7 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan, monthlyUsage, monthlyLimit } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, judgeMeNotInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan, monthlyUsage, monthlyLimit } = useLoaderData<typeof loader>();
   const displayedPlan = currentAppPlan || "Free";
   const isMonthlyCapped = Number.isFinite(monthlyLimit) && monthlyUsage >= (monthlyLimit as number);
   
@@ -563,8 +566,6 @@ export default function Index() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
-  // Derived from URL — survives loader re-runs triggered by navigate()
-  const isJudgeMeNotInstalled = params.get("judgeme_not_installed") === "1";
   const judgeMeFetcher = useFetcher();
   const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
@@ -586,9 +587,8 @@ export default function Index() {
     ];
     let didShowToast = false;
 
-    if (params.get("judgeme_not_installed") === "1") {
+    if (judgeMeNotInstalled) {
       setIsJudgeMeConnecting(false);
-      shopify.toast.show("Judge.me is not installed on this store", { isError: true });
     }
     if (params.get("judgeme_connected") === "1") {
       shopify.toast.show("Connected to Judge.me");
@@ -631,7 +631,13 @@ export default function Index() {
         { replace: true }
       );
     }
-  }, [params, shopify, navigate]);
+  }, [params, shopify, navigate, judgeMeNotInstalled]);
+
+  useEffect(() => {
+    if (judgeMeNotInstalled) {
+      shopify.toast.show("Judge.me is not installed on this store", { isError: true });
+    }
+  }, [judgeMeNotInstalled, shopify]);
 
   useEffect(() => {
     if (actionData) {
@@ -779,7 +785,7 @@ export default function Index() {
                   Connect your Judge.me account to fetch reviews for THIS store only.
                 </Text>
                 
-                {isJudgeMeNotInstalled && (
+                {judgeMeNotInstalled && (
                   <Banner
                     title="Judge.me is not installed on this store"
                     tone="critical"
@@ -800,7 +806,7 @@ export default function Index() {
                     </BlockStack>
                   </Banner>
                 )}
-                {!isJudgeMeConnected && !isJudgeMeNotInstalled && (
+                {!isJudgeMeConnected && !judgeMeNotInstalled && (
                   <Banner tone="info">
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd">
