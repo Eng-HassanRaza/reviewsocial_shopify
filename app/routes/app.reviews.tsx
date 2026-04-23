@@ -1,5 +1,5 @@
 import { type LoaderFunctionArgs, type ActionFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate, useNavigation, Form } from "react-router";
+import { useLoaderData, useNavigate, useNavigation, useSearchParams, Form } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { postStoredReviewToInstagram } from "../services/auto-post-cron.server";
@@ -74,10 +74,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function ReviewsPage() {
-  const { postedReviews, stats } = useLoaderData<typeof loader>();
+  const { postedReviews, stats, shop } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === 'loading';
+  const [params] = useSearchParams();
+  const host = params.get('host');
+
+  function toDashboard() {
+    const qs = new URLSearchParams({ shop });
+    if (host) qs.set('host', host);
+    navigate(`/app?${qs.toString()}`);
+  }
 
   const rowMarkup = postedReviews.map((review, index) => (
     <IndexTable.Row id={review.id} key={review.id} position={index}>
@@ -213,7 +221,7 @@ export default function ReviewsPage() {
                 Reviews will appear here once they're automatically posted to Instagram.
                 Make sure both Judge.me and Instagram are connected.
               </Text>
-              <Button onClick={() => navigate('/app')}>Go to Dashboard</Button>
+              <Button onClick={toDashboard}>Go to Dashboard</Button>
             </BlockStack>
           </EmptyState>
         )}

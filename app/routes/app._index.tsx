@@ -947,7 +947,11 @@ export default function Index() {
 
                   <BlockStack gap="200">
                     <InlineStack gap="300">
-                      <Button onClick={() => navigate('/app/reviews')}>
+                      <Button onClick={() => {
+                        const qs = new URLSearchParams({ shop: currentShop });
+                        if (host) qs.set('host', host);
+                        navigate(`/app/reviews?${qs.toString()}`);
+                      }}>
                         View Posted Reviews
                       </Button>
 
