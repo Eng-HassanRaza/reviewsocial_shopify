@@ -587,8 +587,8 @@ export default function Index() {
     let didShowToast = false;
 
     if (params.get("judgeme_not_installed") === "1") {
-      // Stop connecting spinner; banner is shown via URL param (not state)
       setIsJudgeMeConnecting(false);
+      shopify.toast.show("Judge.me is not installed on this store", { isError: true });
     }
     if (params.get("judgeme_connected") === "1") {
       shopify.toast.show("Connected to Judge.me");
@@ -780,18 +780,19 @@ export default function Index() {
                 </Text>
                 
                 {isJudgeMeNotInstalled && (
-                  <Banner tone="critical" onDismiss={() => {
-                    const cleaned = new URLSearchParams(params);
-                    cleaned.delete("judgeme_not_installed");
-                    navigate({ search: cleaned.toString() ? `?${cleaned.toString()}` : "" }, { replace: true });
-                  }}>
+                  <Banner
+                    title="Judge.me is not installed on this store"
+                    tone="critical"
+                    onDismiss={() => {
+                      const cleaned = new URLSearchParams(params);
+                      cleaned.delete("judgeme_not_installed");
+                      navigate({ search: cleaned.toString() ? `?${cleaned.toString()}` : "" }, { replace: true });
+                    }}
+                  >
                     <BlockStack gap="200">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">
-                        Judge.me is not installed on {currentShop}
-                      </Text>
                       <Text as="p" variant="bodyMd">
-                        The connection failed because Judge.me is not active on this store.
-                        Please install Judge.me first, then come back and click Connect.
+                        The connection failed because Judge.me is not active on <Text as="span" fontWeight="semibold">{currentShop}</Text>.
+                        Install Judge.me first, then come back and click Connect.
                       </Text>
                       <Link url="https://apps.shopify.com/judgeme" target="_blank">
                         Install Judge.me from the Shopify App Store →
