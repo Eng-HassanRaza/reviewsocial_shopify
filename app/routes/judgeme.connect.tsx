@@ -8,6 +8,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const appUrl = process.env.APP_URL!;
   const url = new URL(request.url);
   let shop = url.searchParams.get("shop") || undefined;
+  const host = url.searchParams.get("host");
 
   if (!shop) {
     // Fallback to session only if needed
@@ -15,7 +16,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     shop = session.shop;
   }
 
-  const topRedirect = `${appUrl}/judgeme/redirect?shop=${encodeURIComponent(shop!)}`;
+  const params = new URLSearchParams({ shop: shop! });
+  if (host) params.set("host", host);
+  const topRedirect = `${appUrl}/judgeme/redirect?${params.toString()}`;
   return Response.json({ topRedirect });
 }
 

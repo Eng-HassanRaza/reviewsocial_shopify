@@ -14,6 +14,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Read shop from the querystring (we passed it from the embedded route)
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
+  const host = url.searchParams.get("host");
   if (!shop) {
     return new Response("Missing shop", { status: 400 });
   }
@@ -30,6 +31,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Set-Cookie",
     `jm_oauth_shop=${encodeURIComponent(shop)}; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=${tenMins}`
   );
+  if (host) {
+    headers.append(
+      "Set-Cookie",
+      `jm_oauth_host=${encodeURIComponent(host)}; HttpOnly; Secure; SameSite=Lax; Path=/judgeme/callback; Max-Age=${tenMins}`
+    );
+  }
 
   const params = new URLSearchParams({
     client_id: clientId,

@@ -17,6 +17,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const instagramCredential = await prisma.instagramCredential.findUnique({
     where: { shop: session.shop },
   });
+  let isJudgeMeConnected = Boolean(judgeMeCredential);
+
+  // Validate saved Judge.me token against the current shop to avoid stale "connected" UI states.
+  if (judgeMeCredential?.accessToken) {
+    try {
+      const validationResp = await fetch(
+        `https://judge.me/api/v1/shops/info?shop_domain=${session.shop}&api_token=${judgeMeCredential.accessToken}`
+      );
+      if (!validationResp.ok) {
+        isJudgeMeConnected = false;
+      } else {
+        const validationData = await validationResp.json();
+        const returnedDomain = validationData?.shop?.domain;
+        isJudgeMeConnected = returnedDomain === session.shop;
+      }
+    } catch {
+      isJudgeMeConnected = false;
+    }
+  }
 
   // Note: We cannot reliably detect if Judge.me is installed because:
   // 1. No permission to query scriptTags or appInstallations
@@ -104,7 +123,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const monthlyLimit = normalizedPlan.includes('free') ? 5 : Infinity;
 
   return {
-    isJudgeMeConnected: Boolean(judgeMeCredential),
+    isJudgeMeConnected,
     isJudgeMeInstalled,
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
@@ -543,37 +562,77 @@ export default function Index() {
   const [showJudgeMeModal, setShowJudgeMeModal] = useState(false);
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
   const judgeMeFormRef = useRef<HTMLFormElement>(null);
   const instagramFormRef = useRef<HTMLFormElement>(null);
   const isSubmitting = navigation.state === 'submitting';
   const submittingAction = navigation.formData?.get('_action') as string | null;
+  const isJudgeMeDisconnecting =
+    isSubmitting && navigation.formAction?.includes('/app/judgeme/disconnect');
+  const isInstagramDisconnecting =
+    isSubmitting && navigation.formAction?.includes('/app/instagram/disconnect');
+  const host = params.get("host");
+  const disconnectQuery = new URLSearchParams({ shop: currentShop });
+  if (host) disconnectQuery.set("host", host);
+  const judgeMeDisconnectAction = `/app/judgeme/disconnect?${disconnectQuery.toString()}`;
+  const instagramDisconnectAction = `/app/instagram/disconnect?${disconnectQuery.toString()}`;
+  const judgeMeConnectQuery = new URLSearchParams({ shop: currentShop });
+  if (host) judgeMeConnectQuery.set("host", host);
+  const judgeMeConnectUrl = `/judgeme/connect?${judgeMeConnectQuery.toString()}`;
 
   useEffect(() => {
+    const shownToastParams = [
+      "judgeme_connected",
+      "judgeme_disconnected",
+      "judgeme_error",
+      "instagram_connected",
+      "instagram_disconnected",
+      "instagram_error",
+    ];
+    let didShowToast = false;
+
     if (params.get("judgeme_connected") === "1") {
       shopify.toast.show("Connected to Judge.me");
+      didShowToast = true;
+      setIsJudgeMeConnecting(false);
     }
     if (params.get("judgeme_disconnected") === "1") {
       shopify.toast.show("Disconnected from Judge.me");
+      didShowToast = true;
     }
     if (params.get("judgeme_error")) {
       shopify.toast.show(
         `Judge.me connection failed: ${params.get("judgeme_error")}`,
         { isError: true }
       );
+      didShowToast = true;
+      setIsJudgeMeConnecting(false);
     }
     if (params.get("instagram_connected") === "1") {
       shopify.toast.show("Connected to Instagram");
+      didShowToast = true;
     }
     if (params.get("instagram_disconnected") === "1") {
       shopify.toast.show("Disconnected from Instagram");
+      didShowToast = true;
     }
     if (params.get("instagram_error")) {
       shopify.toast.show(
         `Instagram connection failed: ${params.get("instagram_error")}`,
         { isError: true }
       );
+      didShowToast = true;
     }
-  }, [params, shopify]);
+
+    if (didShowToast) {
+      const cleaned = new URLSearchParams(params);
+      shownToastParams.forEach((key) => cleaned.delete(key));
+      navigate(
+        { search: cleaned.toString() ? `?${cleaned.toString()}` : "" },
+        { replace: true }
+      );
+    }
+  }, [params, shopify, navigate]);
 
   useEffect(() => {
     if (actionData) {
@@ -727,17 +786,28 @@ export default function Index() {
                       </Text>
                     </Banner>
                     <InlineStack gap="200">
-                      <Button variant="plain" onClick={() => setShowJudgeMeModal(true)}>
+                      <Button
+                        variant="plain"
+                        onClick={() => setShowJudgeMeModal(true)}
+                        loading={Boolean(isJudgeMeDisconnecting)}
+                        disabled={Boolean(isJudgeMeDisconnecting) || isJudgeMeConnecting}
+                      >
                         Disconnect Judge.me
                       </Button>
                     </InlineStack>
-                    <Form method="post" action="/app/judgeme/disconnect" ref={judgeMeFormRef} style={{ display: 'none' }}>
+                    <Form method="post" action={judgeMeDisconnectAction} ref={judgeMeFormRef} style={{ display: 'none' }}>
                       <input type="hidden" name="_action" value="disconnect" />
                     </Form>
                   </BlockStack>
                 ) : (
                   <InlineStack gap="200">
-                    <Button variant="primary" url={`/judgeme/connect?shop=${currentShop}`}>
+                    <Button
+                      variant="primary"
+                      url={judgeMeConnectUrl}
+                      loading={isJudgeMeConnecting}
+                      disabled={isJudgeMeConnecting || Boolean(isJudgeMeDisconnecting)}
+                      onClick={() => setIsJudgeMeConnecting(true)}
+                    >
                       Connect to Judge.me
                     </Button>
                   </InlineStack>
@@ -771,11 +841,16 @@ export default function Index() {
                       </Text>
                     </Banner>
                     <InlineStack gap="200">
-                      <Button variant="plain" onClick={() => setShowInstagramModal(true)}>
+                      <Button
+                        variant="plain"
+                        onClick={() => setShowInstagramModal(true)}
+                        loading={Boolean(isInstagramDisconnecting)}
+                        disabled={Boolean(isInstagramDisconnecting)}
+                      >
                         Disconnect Instagram
                       </Button>
                     </InlineStack>
-                    <Form method="post" action="/app/instagram/disconnect" ref={instagramFormRef} style={{ display: 'none' }}>
+                    <Form method="post" action={instagramDisconnectAction} ref={instagramFormRef} style={{ display: 'none' }}>
                       <input type="hidden" name="_action" value="disconnect" />
                     </Form>
                   </BlockStack>

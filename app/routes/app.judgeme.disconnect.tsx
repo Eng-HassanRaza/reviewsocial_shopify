@@ -8,6 +8,8 @@ export const handle = { isPublic: false };
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host");
 
   // Get the credential before deleting it
   const credential = await prisma.judgeMeCredential.findUnique({
@@ -44,7 +46,13 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { shop: session.shop },
   });
 
-  return redirect("/app?judgeme_disconnected=1");
+  const returnParams = new URLSearchParams({
+    judgeme_disconnected: "1",
+    shop: session.shop,
+  });
+  if (host) returnParams.set("host", host);
+
+  return redirect(`/app?${returnParams.toString()}`);
 }
 
 export default function DisconnectJudgeMe() {
