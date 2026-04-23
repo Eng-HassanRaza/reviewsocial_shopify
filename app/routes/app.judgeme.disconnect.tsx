@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from "react-router";
-import { redirect } from "react-router";
 
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
@@ -8,8 +7,6 @@ export const handle = { isPublic: false };
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const url = new URL(request.url);
-  const host = url.searchParams.get("host");
 
   // Get the credential before deleting it
   const credential = await prisma.judgeMeCredential.findUnique({
@@ -46,13 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { shop: session.shop },
   });
 
-  const returnParams = new URLSearchParams({
-    judgeme_disconnected: "1",
-    shop: session.shop,
-  });
-  if (host) returnParams.set("host", host);
-
-  return redirect(`/app?${returnParams.toString()}`);
+  return Response.json({ success: true });
 }
 
 export default function DisconnectJudgeMe() {

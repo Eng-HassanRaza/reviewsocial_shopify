@@ -1,6 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useEffect, useState, useRef } from "react";
-import { Form, useLoaderData, useSearchParams, useActionData, useNavigate, useNavigation } from "react-router";
+import { useEffect, useState } from "react";
+import { Form, useLoaderData, useSearchParams, useActionData, useNavigate, useNavigation, useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -563,19 +563,11 @@ export default function Index() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
-  const judgeMeFormRef = useRef<HTMLFormElement>(null);
-  const instagramFormRef = useRef<HTMLFormElement>(null);
+  const judgeMeFetcher = useFetcher();
+  const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
   const submittingAction = navigation.formData?.get('_action') as string | null;
-  const isJudgeMeDisconnecting =
-    isSubmitting && navigation.formAction?.includes('/app/judgeme/disconnect');
-  const isInstagramDisconnecting =
-    isSubmitting && navigation.formAction?.includes('/app/instagram/disconnect');
   const host = params.get("host");
-  const disconnectQuery = new URLSearchParams({ shop: currentShop });
-  if (host) disconnectQuery.set("host", host);
-  const judgeMeDisconnectAction = `/app/judgeme/disconnect?${disconnectQuery.toString()}`;
-  const instagramDisconnectAction = `/app/instagram/disconnect?${disconnectQuery.toString()}`;
   const judgeMeConnectQuery = new URLSearchParams({ shop: currentShop });
   if (host) judgeMeConnectQuery.set("host", host);
   const judgeMeConnectUrl = `/judgeme/redirect?${judgeMeConnectQuery.toString()}`;
@@ -653,6 +645,20 @@ export default function Index() {
       }
     }
   }, [actionData, shopify]);
+
+  useEffect(() => {
+    if (judgeMeFetcher.state === 'idle' && judgeMeFetcher.data?.success) {
+      shopify.toast.show("Disconnected from Judge.me");
+      navigate('/app');
+    }
+  }, [judgeMeFetcher.state, judgeMeFetcher.data, navigate, shopify]);
+
+  useEffect(() => {
+    if (instagramFetcher.state === 'idle' && instagramFetcher.data?.success) {
+      shopify.toast.show("Disconnected from Instagram");
+      navigate('/app');
+    }
+  }, [instagramFetcher.state, instagramFetcher.data, navigate, shopify]);
 
   return (
     <Page title="SocialRevu">
@@ -789,22 +795,19 @@ export default function Index() {
                       <Button
                         variant="plain"
                         onClick={() => setShowJudgeMeModal(true)}
-                        loading={Boolean(isJudgeMeDisconnecting)}
-                        disabled={Boolean(isJudgeMeDisconnecting) || isJudgeMeConnecting}
+                        loading={judgeMeFetcher.state !== 'idle'}
+                        disabled={judgeMeFetcher.state !== 'idle'}
                       >
                         Disconnect Judge.me
                       </Button>
                     </InlineStack>
-                    <Form method="post" action={judgeMeDisconnectAction} ref={judgeMeFormRef} style={{ display: 'none' }}>
-                      <input type="hidden" name="_action" value="disconnect" />
-                    </Form>
                   </BlockStack>
                 ) : (
                   <InlineStack gap="200">
                     <Button
                       variant="primary"
                       loading={isJudgeMeConnecting}
-                      disabled={isJudgeMeConnecting || Boolean(isJudgeMeDisconnecting)}
+                      disabled={isJudgeMeConnecting || judgeMeFetcher.state !== 'idle'}
                       onClick={() => {
                         setIsJudgeMeConnecting(true);
                         window.open(judgeMeConnectUrl, "_top");
@@ -846,15 +849,12 @@ export default function Index() {
                       <Button
                         variant="plain"
                         onClick={() => setShowInstagramModal(true)}
-                        loading={Boolean(isInstagramDisconnecting)}
-                        disabled={Boolean(isInstagramDisconnecting)}
+                        loading={instagramFetcher.state !== 'idle'}
+                        disabled={instagramFetcher.state !== 'idle'}
                       >
                         Disconnect Instagram
                       </Button>
                     </InlineStack>
-                    <Form method="post" action={instagramDisconnectAction} ref={instagramFormRef} style={{ display: 'none' }}>
-                      <input type="hidden" name="_action" value="disconnect" />
-                    </Form>
                   </BlockStack>
                 ) : (
                   <BlockStack gap="300">
@@ -979,7 +979,7 @@ export default function Index() {
           destructive: true,
           onAction: () => {
             setShowJudgeMeModal(false);
-            judgeMeFormRef.current?.submit();
+            judgeMeFetcher.submit({}, { method: 'post', action: '/app/judgeme/disconnect' });
           },
         }}
         secondaryActions={[{ content: 'Cancel', onAction: () => setShowJudgeMeModal(false) }]}
@@ -1000,7 +1000,7 @@ export default function Index() {
           destructive: true,
           onAction: () => {
             setShowInstagramModal(false);
-            instagramFormRef.current?.submit();
+            instagramFetcher.submit({}, { method: 'post', action: '/app/instagram/disconnect' });
           },
         }}
         secondaryActions={[{ content: 'Cancel', onAction: () => setShowInstagramModal(false) }]}
