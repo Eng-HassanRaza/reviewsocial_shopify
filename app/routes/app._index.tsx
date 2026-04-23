@@ -795,7 +795,7 @@ export default function Index() {
                         Disconnect Judge.me
                       </Button>
                     </InlineStack>
-                    <Form method="post" action={judgeMeDisconnectAction} ref={judgeMeFormRef} style={{ display: 'none' }}>
+                    <Form method="post" target="_top" action={judgeMeDisconnectAction} ref={judgeMeFormRef} style={{ display: 'none' }}>
                       <input type="hidden" name="_action" value="disconnect" />
                     </Form>
                   </BlockStack>
@@ -852,7 +852,7 @@ export default function Index() {
                         Disconnect Instagram
                       </Button>
                     </InlineStack>
-                    <Form method="post" action={instagramDisconnectAction} ref={instagramFormRef} style={{ display: 'none' }}>
+                    <Form method="post" target="_top" action={instagramDisconnectAction} ref={instagramFormRef} style={{ display: 'none' }}>
                       <input type="hidden" name="_action" value="disconnect" />
                     </Form>
                   </BlockStack>
