@@ -803,10 +803,12 @@ export default function Index() {
                   <InlineStack gap="200">
                     <Button
                       variant="primary"
-                      url={judgeMeConnectUrl}
                       loading={isJudgeMeConnecting}
                       disabled={isJudgeMeConnecting || Boolean(isJudgeMeDisconnecting)}
-                      onClick={() => setIsJudgeMeConnecting(true)}
+                      onClick={() => {
+                        setIsJudgeMeConnecting(true);
+                        window.open(judgeMeConnectUrl, "_top");
+                      }}
                     >
                       Connect to Judge.me
                     </Button>
