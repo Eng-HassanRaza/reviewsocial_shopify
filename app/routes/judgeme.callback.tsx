@@ -28,12 +28,6 @@ export async function loader({ request }: { request: Request }) {
   const shop = getCookie(request, "jm_oauth_shop");
   const host = getCookie(request, "jm_oauth_host"); // ok if null
 
-  // Build your Admin Apps URL (embedded context)
-  const apiKey = process.env.SHOPIFY_API_KEY!;
-  const adminAppBase = shop && apiKey
-    ? `https://${shop}/admin/apps/${apiKey}/app`
-    : null; // fallback later if missing
-
   // helper to finish (success or error) and clear temp cookies
   const finish = (search: Record<string, string>) => {
     const headers = new Headers();
@@ -48,12 +42,7 @@ export async function loader({ request }: { request: Request }) {
     );
 
     const qs = new URLSearchParams(search);
-
-    // Prefer redirecting back into Shopify Admin embedded context
-    if (adminAppBase) {
-      return redirect(`${adminAppBase}?${qs.toString()}`, { headers });
-    }
-    // Fallback: redirect to your own /app (top-level) if apiKey or shop missing
+    // Redirect back to app route with host/shop context to let Shopify app bridge re-embed correctly.
     return redirect(`/app?${qs.toString()}`, { headers });
   };
 

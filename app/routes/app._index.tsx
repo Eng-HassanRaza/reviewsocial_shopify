@@ -578,7 +578,7 @@ export default function Index() {
   const instagramDisconnectAction = `/app/instagram/disconnect?${disconnectQuery.toString()}`;
   const judgeMeConnectQuery = new URLSearchParams({ shop: currentShop });
   if (host) judgeMeConnectQuery.set("host", host);
-  const judgeMeConnectUrl = `/judgeme/connect?${judgeMeConnectQuery.toString()}`;
+  const judgeMeConnectUrl = `/judgeme/redirect?${judgeMeConnectQuery.toString()}`;
 
   useEffect(() => {
     const shownToastParams = [
