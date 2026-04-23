@@ -213,7 +213,7 @@ export default function ReviewsPage() {
                 Reviews will appear here once they're automatically posted to Instagram.
                 Make sure both Judge.me and Instagram are connected.
               </Text>
-              <Button url="/app">Go to Dashboard</Button>
+              <Button onClick={() => navigate('/app')}>Go to Dashboard</Button>
             </BlockStack>
           </EmptyState>
         )}
