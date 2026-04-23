@@ -563,7 +563,8 @@ export default function Index() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
-  const [isJudgeMeNotInstalled, setIsJudgeMeNotInstalled] = useState(false);
+  // Derived from URL — survives loader re-runs triggered by navigate()
+  const isJudgeMeNotInstalled = params.get("judgeme_not_installed") === "1";
   const judgeMeFetcher = useFetcher();
   const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
@@ -578,7 +579,7 @@ export default function Index() {
       "judgeme_connected",
       "judgeme_disconnected",
       "judgeme_error",
-      "judgeme_not_installed",
+      // judgeme_not_installed is NOT here — it stays in URL until user dismisses the banner
       "instagram_connected",
       "instagram_disconnected",
       "instagram_error",
@@ -586,13 +587,11 @@ export default function Index() {
     let didShowToast = false;
 
     if (params.get("judgeme_not_installed") === "1") {
-      setIsJudgeMeNotInstalled(true);
+      // Stop connecting spinner; banner is shown via URL param (not state)
       setIsJudgeMeConnecting(false);
-      didShowToast = true;
     }
     if (params.get("judgeme_connected") === "1") {
       shopify.toast.show("Connected to Judge.me");
-      setIsJudgeMeNotInstalled(false);
       didShowToast = true;
       setIsJudgeMeConnecting(false);
     }
@@ -657,7 +656,6 @@ export default function Index() {
   useEffect(() => {
     if (judgeMeFetcher.state === 'idle' && judgeMeFetcher.data?.success) {
       shopify.toast.show("Disconnected from Judge.me");
-      setIsJudgeMeNotInstalled(false);
       const qs = new URLSearchParams({ shop: currentShop });
       if (host) qs.set('host', host);
       navigate(`/app?${qs.toString()}`);
@@ -782,7 +780,11 @@ export default function Index() {
                 </Text>
                 
                 {isJudgeMeNotInstalled && (
-                  <Banner tone="critical" onDismiss={() => setIsJudgeMeNotInstalled(false)}>
+                  <Banner tone="critical" onDismiss={() => {
+                    const cleaned = new URLSearchParams(params);
+                    cleaned.delete("judgeme_not_installed");
+                    navigate({ search: cleaned.toString() ? `?${cleaned.toString()}` : "" }, { replace: true });
+                  }}>
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd" fontWeight="semibold">
                         Judge.me is not installed on {currentShop}
