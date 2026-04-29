@@ -10,9 +10,11 @@ import { Page, Layout, Card, Banner, Button, Text, BlockStack, InlineStack, Link
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
-  // Read the not-installed cookie set by the callback (URL params don't survive Shopify's redirect chain)
+  // Read cookies set by the callback — URL params don't survive Shopify's redirect chain
   const cookieHeader = request.headers.get("Cookie") || "";
   const judgeMeNotInstalled = /(?:^|;\s*)jm_not_installed=1(?:;|$)/.test(cookieHeader);
+  const jmErrorMatch = cookieHeader.match(/(?:^|;\s*)jm_oauth_error=([^;]+)/);
+  const judgeMeOAuthError = jmErrorMatch ? decodeURIComponent(jmErrorMatch[1]) : null;
   
   const judgeMeCredential = await prisma.judgeMeCredential.findUnique({
     where: { shop: session.shop },
@@ -129,6 +131,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isJudgeMeConnected,
     isJudgeMeInstalled,
     judgeMeNotInstalled,
+    judgeMeOAuthError,
     isInstagramConnected: Boolean(instagramCredential),
     instagramUsername: instagramCredential?.instagramUsername,
     currentShop: session.shop,
@@ -145,13 +148,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   };
 
-  // Clear the not-installed cookie after reading it so it only shows once
-  if (judgeMeNotInstalled) {
-    return Response.json(data, {
-      headers: {
-        "Set-Cookie": "jm_not_installed=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
-      },
-    });
+  // Clear signal cookies after reading — they must only show once
+  if (judgeMeNotInstalled || judgeMeOAuthError) {
+    const clearCookies = [
+      "jm_not_installed=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+      "jm_oauth_error=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+    ];
+    const headers = new Headers();
+    clearCookies.forEach((c) => headers.append("Set-Cookie", c));
+    return Response.json(data, { headers });
   }
   return data;
 };
@@ -566,7 +571,7 @@ export default function Index() {
   const shopify = useAppBridge();
   const [params] = useSearchParams();
   const actionData = useActionData<typeof action>();
-  const { isJudgeMeConnected, isJudgeMeInstalled, judgeMeNotInstalled, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan, monthlyUsage, monthlyLimit } = useLoaderData<typeof loader>();
+  const { isJudgeMeConnected, isJudgeMeInstalled, judgeMeNotInstalled, judgeMeOAuthError, isInstagramConnected, instagramUsername, currentShop, stats, legalUrls, managedPricingUrl, currentAppPlan, monthlyUsage, monthlyLimit } = useLoaderData<typeof loader>();
   const displayedPlan = currentAppPlan || "Free";
   const isMonthlyCapped = Number.isFinite(monthlyLimit) && monthlyUsage >= (monthlyLimit as number);
   
@@ -650,6 +655,17 @@ export default function Index() {
       shopify.toast.show("Judge.me is not installed on this store", { isError: true });
     }
   }, [judgeMeNotInstalled, shopify]);
+
+  useEffect(() => {
+    if (judgeMeOAuthError) {
+      const friendly =
+        judgeMeOAuthError === "access_denied"
+          ? "Judge.me connection cancelled."
+          : `Judge.me connection failed: ${judgeMeOAuthError}`;
+      shopify.toast.show(friendly, { isError: true });
+      setIsJudgeMeConnecting(false);
+    }
+  }, [judgeMeOAuthError, shopify]);
 
   useEffect(() => {
     if (actionData) {

@@ -16,23 +16,33 @@ function clearCookieHeader(name: string) {
   ];
 }
 
-/* --- helper: redirect back to /app with a cookie signalling not-installed ---
-   URL params get dropped by Shopify's auth redirect chain, so we use a cookie instead. */
-function finishNotInstalled({ host, shop }: { host: string | null; shop: string | null }) {
+/* --- cookie-based signalling helpers ---
+   URL params get dropped by Shopify's auth redirect chain, so we use cookies instead. */
+
+function cookieRedirect(
+  cookieName: string,
+  cookieValue: string,
+  { host, shop }: { host: string | null; shop: string | null }
+) {
   const headers = new Headers();
   clearCookieHeader("jm_oauth_state").forEach((c) => headers.append("Set-Cookie", c));
   clearCookieHeader("jm_oauth_shop").forEach((c) => headers.append("Set-Cookie", c));
   clearCookieHeader("jm_oauth_host").forEach((c) => headers.append("Set-Cookie", c));
-  // 5-minute cookie — survives the redirect chain, cleared by the /app loader after reading
   headers.append(
     "Set-Cookie",
-    "jm_not_installed=1; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300"
+    `${cookieName}=${encodeURIComponent(cookieValue)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
   );
   const qs = new URLSearchParams();
   if (shop) qs.set("shop", shop);
   if (host) qs.set("host", host);
   return redirect(`/app?${qs.toString()}`, { headers });
 }
+
+const finishNotInstalled = (ctx: { host: string | null; shop: string | null }) =>
+  cookieRedirect("jm_not_installed", "1", ctx);
+
+const finishWithError = (message: string, ctx: { host: string | null; shop: string | null }) =>
+  cookieRedirect("jm_oauth_error", message, ctx);
 
 /* --- loader: validate state, exchange code, then redirect into Admin Apps URL --- */
 export async function loader({ request }: { request: Request }) {
@@ -64,10 +74,10 @@ export async function loader({ request }: { request: Request }) {
     return redirect(`/app?${qs.toString()}`, { headers });
   };
 
-  if (error) return finish({ judgeme_error: error });
-  if (!code || !state) return finish({ judgeme_error: "missing_params" });
+  if (error) return finishWithError(error, { host, shop });
+  if (!code || !state) return finishWithError("missing_params", { host, shop });
   if (!stateCookie || stateCookie !== state || !shop) {
-    return finish({ judgeme_error: "invalid_state" });
+    return finishWithError("invalid_state", { host, shop });
   }
 
   const tokenUrl = process.env.JUDGEME_TOKEN_URL!;
@@ -145,10 +155,8 @@ export async function loader({ request }: { request: Request }) {
       
       // STRICT CHECK: Returned domain MUST exactly match current shop
       if (!returnedShopDomain) {
-        console.error(`[Judge.me Validation] FAILED: No shop domain in response`);
-        throw new Error(
-          `Invalid response from Judge.me API. Please try again or contact support.`
-        );
+        console.error(`[Judge.me Validation] FAILED: No shop domain in response — likely a new Judge.me account with no shop registered`);
+        return finishNotInstalled({ host, shop });
       }
       
       if (returnedShopDomain !== shop) {
@@ -222,14 +230,8 @@ export async function loader({ request }: { request: Request }) {
       throw validationError;
     }
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "oauth_failed";
-    const q: Record<string, string> = {
-      judgeme_error: message,
-    };
-    if (host) q.host = host;
-    if (shop) q.shop = shop;
-    return finish(q);
+    const message = error instanceof Error ? error.message : "oauth_failed";
+    return finishWithError(message, { host, shop });
   }
 }
 
