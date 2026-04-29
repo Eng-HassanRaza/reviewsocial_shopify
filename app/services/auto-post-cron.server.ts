@@ -174,7 +174,8 @@ async function processShopReviews(shop: string, judgeMeToken: string): Promise<P
   }
 
   const remainingToday = MAX_POSTS_PER_DAY - todayPostCount;
-  let quotaLeftThisRun = Math.min(MAX_POSTS_PER_RUN, remainingToday);
+  const remainingMonthly = monthlyQuota === Infinity ? Infinity : monthlyQuota - monthPostCount;
+  let quotaLeftThisRun = Math.min(MAX_POSTS_PER_RUN, remainingToday, remainingMonthly);
 
   console.log(`[Cron] ${shop}: Can post up to ${quotaLeftThisRun} reviews this run (${todayPostCount}/${MAX_POSTS_PER_DAY} today)`);
 
