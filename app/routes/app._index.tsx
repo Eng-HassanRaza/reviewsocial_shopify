@@ -764,10 +764,10 @@ export default function Index() {
               <Card>
                 <BlockStack gap="200">
                   <Text as="p" variant="heading2xl" fontWeight="bold">
-                    {stats.todayPosted}/10
+                    {monthlyUsage}{Number.isFinite(monthlyLimit) ? ` / ${monthlyLimit}` : ''}
                   </Text>
                   <Text as="p" variant="bodyMd" tone="subdued">
-                    Posted Today
+                    Posted This Month{Number.isFinite(monthlyLimit) ? ` (${displayedPlan} plan)` : ''}
                   </Text>
                 </BlockStack>
               </Card>

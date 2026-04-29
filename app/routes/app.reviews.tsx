@@ -52,15 +52,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const prismaAny = prisma as any;
+  const storedPlan = await prismaAny.shopPlan.findUnique({ where: { shop } });
+  const planName = (storedPlan?.planName || 'Free').toLowerCase();
+  const monthlyLimit = planName.includes('free') ? 5 : Infinity;
+
   const stats = {
     totalPosted: await prisma.postedReview.count({
       where: { shop, status: 'success' },
     }),
-    todayPosted: await prisma.postedReview.count({
+    monthlyPosted: await prisma.postedReview.count({
       where: {
         shop,
         status: 'success',
-        postedAt: { gte: todayStart },
+        postedAt: { gte: monthStart },
       },
     }),
     failed: await prisma.postedReview.count({
@@ -72,11 +81,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   };
 
-  return { postedReviews, stats, shop };
+  return { postedReviews, stats, monthlyLimit, planName: storedPlan?.planName || 'Free', shop };
 }
 
 export default function ReviewsPage() {
-  const { postedReviews, stats, shop } = useLoaderData<typeof loader>();
+  const { postedReviews, stats, monthlyLimit, planName, shop } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === 'loading';
@@ -209,10 +218,10 @@ export default function ReviewsPage() {
             <Card>
               <BlockStack gap="200">
                 <Text as="p" variant="heading2xl" fontWeight="bold">
-                  {stats.todayPosted}/10
+                  {stats.monthlyPosted}{Number.isFinite(monthlyLimit) ? ` / ${monthlyLimit}` : ''}
                 </Text>
                 <Text as="p" variant="bodyMd" tone="subdued">
-                  Posted Today
+                  This Month{Number.isFinite(monthlyLimit) ? ` (${planName})` : ''}
                 </Text>
               </BlockStack>
             </Card>
