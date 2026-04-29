@@ -583,6 +583,10 @@ export default function Index() {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isJudgeMeConnecting, setIsJudgeMeConnecting] = useState(false);
   const [notInstalledDismissed, setNotInstalledDismissed] = useState(false);
+  // isMounted prevents Polaris Banner from rendering during SSR (it generates
+  // dynamic IDs that differ server↔client, causing React hydration error #418)
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
   const judgeMeFetcher = useFetcher();
   const instagramFetcher = useFetcher();
   const isSubmitting = navigation.state === 'submitting';
@@ -650,13 +654,12 @@ export default function Index() {
     }
   }, [params, shopify, navigate, judgeMeNotInstalled]);
 
+  // Show toasts for cookie-based signals once on mount (after hydration succeeds)
   useEffect(() => {
     if (judgeMeNotInstalled) {
       shopify.toast.show("Judge.me is not installed on this store", { isError: true });
+      setIsJudgeMeConnecting(false);
     }
-  }, [judgeMeNotInstalled, shopify]);
-
-  useEffect(() => {
     if (judgeMeOAuthError) {
       const friendly =
         judgeMeOAuthError === "access_denied"
@@ -665,7 +668,8 @@ export default function Index() {
       shopify.toast.show(friendly, { isError: true });
       setIsJudgeMeConnecting(false);
     }
-  }, [judgeMeOAuthError, shopify]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — fires once on mount only
 
   useEffect(() => {
     if (actionData) {
@@ -813,7 +817,7 @@ export default function Index() {
                   Connect your Judge.me account to fetch reviews for THIS store only.
                 </Text>
                 
-                {judgeMeNotInstalled && !notInstalledDismissed && (
+                {isMounted && judgeMeNotInstalled && !notInstalledDismissed && (
                   <Banner
                     title="Judge.me is not installed on this store"
                     tone="critical"
@@ -830,7 +834,7 @@ export default function Index() {
                     </BlockStack>
                   </Banner>
                 )}
-                {!isJudgeMeConnected && (!judgeMeNotInstalled || notInstalledDismissed) && (
+                {!isJudgeMeConnected && (!isMounted || !judgeMeNotInstalled || notInstalledDismissed) && (
                   <Banner tone="info">
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd">
