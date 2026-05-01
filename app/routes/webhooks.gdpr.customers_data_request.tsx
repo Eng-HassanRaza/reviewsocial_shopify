@@ -29,11 +29,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       hasPhone: !!customerPhone,
     });
 
-    // Build name-based search terms from email prefix (before @) since
-    // reviewerName stores display names sourced from Judge.me, not emails.
+    // Build name-based search terms from first/last name and email prefix,
+    // since reviewerName stores display names from Judge.me (not emails).
     const searchTerms: string[] = [];
-    if (customerEmail) {
-      // e.g. "john.doe@example.com" → search for "john" and "doe"
+
+    // Use first_name / last_name from the payload if available
+    const firstName = (payload.customer?.first_name as string | undefined)?.trim().toLowerCase();
+    const lastName = (payload.customer?.last_name as string | undefined)?.trim().toLowerCase();
+    if (firstName && firstName.length > 1) searchTerms.push(firstName);
+    if (lastName && lastName.length > 1) searchTerms.push(lastName);
+
+    // Also extract from email prefix as fallback
+    if (customerEmail && searchTerms.length === 0) {
       const emailPrefix = customerEmail.split("@")[0];
       emailPrefix.split(/[._\-+]/).forEach((part) => {
         if (part.length > 1) searchTerms.push(part.toLowerCase());

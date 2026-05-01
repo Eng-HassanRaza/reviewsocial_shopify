@@ -28,9 +28,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       hasEmail: !!customerEmail,
     });
 
-    // Build name search terms from email prefix (same logic as data_request)
+    // Build name search terms from first/last name and email prefix
     const searchTerms: string[] = [];
-    if (customerEmail) {
+
+    const firstName = (payload.customer?.first_name as string | undefined)?.trim().toLowerCase();
+    const lastName = (payload.customer?.last_name as string | undefined)?.trim().toLowerCase();
+    if (firstName && firstName.length > 1) searchTerms.push(firstName);
+    if (lastName && lastName.length > 1) searchTerms.push(lastName);
+
+    if (customerEmail && searchTerms.length === 0) {
       const emailPrefix = customerEmail.split("@")[0];
       emailPrefix.split(/[._\-+]/).forEach((part) => {
         if (part.length > 1) searchTerms.push(part.toLowerCase());
