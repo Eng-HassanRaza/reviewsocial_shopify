@@ -37,6 +37,11 @@ api_version = "2026-01"
 # All review and Instagram data is fetched from Judge.me and Meta APIs directly.
 scopes = ""
 
+# Billing: This app uses Shopify Managed Pricing.
+# Pricing plans are configured in the Partner Dashboard under "Pricing & Distribution".
+# The app checks activeSubscriptions via currentAppInstallation to enforce plan limits.
+# No appSubscriptionCreate mutation is needed — Managed Pricing handles checkout.
+
 [auth]
 redirect_urls = [
   "https://reviewsocial-production.up.railway.app/auth/callback",

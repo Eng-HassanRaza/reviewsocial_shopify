@@ -63,12 +63,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 /**
- * Allow manual triggering via browser (for testing)
+ * GET returns 405 — only POST is accepted
  */
 export async function loader() {
-  return new Response('Use POST to trigger auto-post cron job', { 
-    status: 200,
-    headers: { 'Content-Type': 'text/plain' },
-  });
+  return new Response(null, { status: 405 });
 }
 
